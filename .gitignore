@@ -215,8 +215,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Data and database
+# Data and database (do not commit large files)
 data/*.csv
+data/data.csv
 database/*.db
 database/*.sqlite
+database/embeddings.db
 **/__pycache__/
