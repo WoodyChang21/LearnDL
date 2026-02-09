@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Data and database
+data/*.csv
+database/*.db
+database/*.sqlite
+**/__pycache__/
