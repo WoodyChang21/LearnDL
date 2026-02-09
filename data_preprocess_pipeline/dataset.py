@@ -107,14 +107,21 @@ class CustomizeDataset(Dataset):
 
         # 2) Create a TensorDataset and DataLoader
         dataset_tensors = TensorDataset(input_ids, attention_masks)
-        dataloader = DataLoader(dataset_tensors, batch_size=self.batch_size, shuffle=False)
+        dataloader = DataLoader(
+            dataset_tensors,
+            batch_size=self.batch_size,
+            shuffle=False,
+            pin_memory=(DEVICE == "cuda"),  # faster CPU->GPU transfer when using CUDA
+        )
 
         # We'll need to index back into `self.texts` to save each sample’s .pt
         idx_offset = 0 #Keep track of the review index when saving embeddings
 
         for batch in tqdm(dataloader, total=len(dataloader)):
-            input_ids, attention_mask = [t.to(DEVICE) for t in batch] #[input_ids, attention_mask]
-            # input_ids, attention_mask = [t for t in batch]
+            # Move batch to same device as model (required for forward pass)
+            input_ids, attention_mask = [
+                t.to(DEVICE, non_blocking=True) for t in batch
+            ]
 
             with torch.no_grad():
                 outputs = self.bert_model( # Compute BERT Embeddings
@@ -135,7 +142,7 @@ class CustomizeDataset(Dataset):
                 pooled_embedding_dimension = pooled_embedding_tensor.shape
                 last_hidden_embedding_dimension = last_hidden_embedding_tensor.shape
                 
-                # Convert to butes to store in SQLlite database
+                # Convert to bytes to store in SQLite database
                 pooled_embedding = pooled_embedding_tensor.numpy().astype(np.float32).tobytes()
                 last_hidden_embedding = last_hidden_embedding_tensor.numpy().astype(np.float32).tobytes()
 
