@@ -5,10 +5,10 @@ from model_training_pipeline.embed_model import bert_model
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-class SentimentClassifierLast(nn.Module):
+class SentimentClassifier(nn.Module):
 
   def __init__(self, n_classes, hidden_neuron=256, dropout=0.3, num_layers=1):
-    super(SentimentClassifierLast, self).__init__()
+    super(SentimentClassifier, self).__init__()
 
     # Use LSTM since sequential input data
 
@@ -16,12 +16,12 @@ class SentimentClassifierLast(nn.Module):
     self.rnn = nn.GRU(768, hidden_neuron, num_layers=num_layers, bidirectional=True, batch_first=True) # Take the last hidden state
     self.fc = nn.Linear(hidden_neuron*2, n_classes)
     self.dropout = nn.Dropout(dropout)
-    self.bert_model = bert_model.bert_model.to(DEVICE)
+    self.bert_model = bert_model
 
   def _embed_input(self, input_ids, attention_mask):
     input_ids = input_ids.to(DEVICE)
     attention_mask = attention_mask.to(DEVICE)
-    outputs = self.bert_model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
+    outputs = self.bert_model.embed(input_ids, attention_mask)
     return outputs.hidden_states[-1]
 
   
@@ -40,4 +40,4 @@ class SentimentClassifierLast(nn.Module):
 
     return outputs
 
-classify_model = SentimentClassifierLast(n_classes=2)
+classify_model = SentimentClassifier(n_classes=2)

@@ -14,41 +14,36 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class datapreprocess_dataloader():
-    def __init__(self, batch_size=256, max_len=400):
+    def __init__(self, batch_size=256, max_len=400, data_path: str = None):
         self.batch_size = batch_size
         self.max_len = max_len
-        _, self.X, self.y = read_data()
+        _, self.X, self.y = read_data(path=data_path)
         self.data_dataset = CustomizeDataset(
             text=self.X[:100],
             targets=self.y[:100],
-            tokenizer=bert_model.tokenizer,
             max_len=self.max_len,
-            bert_model=bert_model.bert_model,
-            # precompute=precompute,
+            bert_model=bert_model,
             batch_size=self.batch_size
         )
 
     def split_data(self, batch_size=16):
         n_total = len(self.data_dataset)
-        n_train = int(0.8 * n_total)
-        n_val   = int(0.1 * n_total)
-        n_test  = n_total - n_train - n_val 
-
+        n_train, n_val, n_test = int(0.8 * n_total), int(0.1 * n_total), int(0.1 * n_total)
         train_dataset, val_dataset, test_dataset = random_split(
             self.data_dataset, 
             [n_train, n_val, n_test])
 
         # DataLoaders run on CPU; use pin_memory for faster CPU->GPU when using CUDA
         train_loader = DataLoader(
-            train_dataset, batch_size=16, shuffle=False,
+            train_dataset, batch_size=batch_size, shuffle=False,
             pin_memory=(DEVICE == "cuda"),
         )
         val_loader = DataLoader(
-            val_dataset, batch_size=16, shuffle=False,
+            val_dataset, batch_size=batch_size, shuffle=False,
             pin_memory=(DEVICE == "cuda"),
         )
         test_loader = DataLoader(
-            test_dataset, batch_size=16, shuffle=False,
+            test_dataset, batch_size=batch_size, shuffle=False,
             pin_memory=(DEVICE == "cuda"),
         )
 

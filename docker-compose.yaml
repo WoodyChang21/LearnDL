@@ -1,0 +1,10 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # optional: persist data to a volume
+    # volumes:
+    #   - redis_data:/var/lib/redis
+# volumes:
+#   redis_data:

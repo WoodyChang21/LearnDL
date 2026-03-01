@@ -5,9 +5,9 @@ This file is used in dataloader.py to essentially create train/validation/test d
 
 from torch.utils.data import Dataset
 import torch
-
+from model_training_pipeline.embed_model import BERT
 #Database
-from database import db
+# from database import db
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -16,9 +16,8 @@ class CustomizeDataset(Dataset):
         self,
         text,
         targets,
-        tokenizer,
         max_len,
-        bert_model=None,
+        bert_model: BERT = None,
         # precompute=True,
         batch_size=256
     ):
@@ -27,19 +26,18 @@ class CustomizeDataset(Dataset):
         targets     : array/list of 'positive'/'negative' labels
         tokenizer   : BERT tokenizer
         max_len     : maximum sequence length for tokenization
-        bert_model  : a BERT model for generating embeddings (if precompute=True)
+        bert_model  : BERT model class from embed_model.py
         embed_folder: folder to store .pt files of precomputed embeddings
         precompute  : True -> generate & save embeddings, False -> load from disk only
         """
         self.texts = text
         self.targets = targets
-        self.tokenizer = tokenizer
         self.max_len = max_len
         self.bert_model = bert_model
         # self.precompute = precompute
         self.batch_size = batch_size
         # Initialize database
-        self.conn = db.init_db()
+        # self.conn = db.init_db()
 
         # if self.precompute and (self.bert_model is not None):
         #     self._precompute_embeddings()
@@ -57,15 +55,7 @@ class CustomizeDataset(Dataset):
         text = str(self.texts[idx])
         target = 1 if self.targets[idx] == "positive" else 0
 
-        enc = self.tokenizer(
-            text,
-            add_special_tokens=True,
-            max_length=self.max_len,
-            padding="max_length",
-            truncation=True,
-            return_attention_mask=True,
-            return_tensors="pt",
-        )
+        enc = self.bert_model.tokenize(text)
  
         return {
             "input_ids": enc["input_ids"].squeeze(0),

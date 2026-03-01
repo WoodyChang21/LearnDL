@@ -1,11 +1,11 @@
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from model_training_pipeline.classify_model import classify_model, SentimentClassifierLast
+from model_training_pipeline.classify_model import classify_model, SentimentClassifier
 from data_preprocess_pipeline.pipeline import train_loader, test_loader
 
 
-def get_accuracy(data_loader: DataLoader, model: SentimentClassifierLast):
+def get_accuracy(data_loader: DataLoader, model: SentimentClassifier):
     """ Compute the accuracy of the `model` across a dataset `data`
 
     Example usage:
@@ -28,7 +28,7 @@ def get_accuracy(data_loader: DataLoader, model: SentimentClassifierLast):
         
         input_ids, attention_mask = sample_batch["input_ids"].to(DEVICE), sample_batch["attention_mask"].to(DEVICE)
         
-        outputs = classify_model(input_ids, attention_mask)
+        outputs = model(input_ids, attention_mask)
         labels = sample_batch["labels"]
 
         _, predicted = torch.max(outputs.data, 1)

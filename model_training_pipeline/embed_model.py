@@ -26,15 +26,11 @@ class BERT:
         )
         return encoding
 
-    def forward_pass(self, encoding):
-        if encoding == None:
-            raise ValueError(
-                "Encoding is None. Please call the 'tokenize' method first before passing data to 'model_output'."
-            )
+    def embed(self, input_ids, attetion_mask):
 
         output = self.bert_model(
-            input_ids=encoding["input_ids"],
-            attention_mask=encoding["attention_mask"],
+            input_ids=input_ids,
+            attention_mask=attetion_mask,
             output_hidden_states=True,
         )
 
@@ -49,5 +45,5 @@ if __name__ == "__main__":
         "I want to learn how to do sentiment analysis using BERT and tokenizer."
     )
     encoding = bert_model.tokenize(sample_txt)
-    output = bert_model.forward_pass(encoding)
+    output = bert_model.embed(encoding)
     print(output.keys())
