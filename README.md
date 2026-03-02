@@ -139,6 +139,12 @@ DB stores only **metadata and file paths/URLs**, not raw binary blobs.
 
 
 ## Tentative Plan
+| Week | I-Hsuan Ho | Der-Chien Chang | Kuan-Yu Chang | Chia-Chun Wu |
+|------|------------|-----------------|---------------|--------------|
+| **Week 1 (March 2, 2026)** | • Cloud setup + S3 connection test<br>• Signed URL upload + validation | • Design Prototype<br>• Prediction API<br>• Model training pipeline | • DB schema + authentication<br>• Dataset API + ownership checks | • Implement UI skeleton (3 pages)<br>• Auth UI for login/register |
+| **Week 2 (March 9, 2026)** | • Artifact storage structure<br>• Zip packaging pipeline | • Model training pipeline<br>• Model Result Visualization components Pipeline (model, cloud, render frontend) | • Dataset API + ownership checks<br>• Secure artifact endpoints | • Dataset upload UI components and dropdown<br>• History sidebar UI<br>• Prediction page |
+| **Week 3 (March 16, 2026)** | • Presentation Slides and Rehearsal<br>• Artifact download URLs | • Presentation Slides and Rehearsal | • Presentation Slides and Rehearsal | • Presentation Slides and Rehearsal |
+| **Week 4 (March 23, 2026)** | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation |
 
 
 ## Initial Independent Reasoning (Before using AI)
