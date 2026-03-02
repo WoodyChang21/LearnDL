@@ -136,6 +136,29 @@ DB stores only **metadata and file paths/URLs**, not raw binary blobs.
 
 
 #### 5. Planned Advanced Feature(At Least Two)
+We will implement **at least two** (we plan 4 to be safe):
+
+1. **Authentication & authorization**
+- Register/login/logout
+- Protected API routes
+- Per-user isolation (users can only see their own runs and files)
+1. **Real-time progress updates**
+- Training is asynchronous
+- Frontend receives live status updates via **SSE** (simpler than WebSocket) showing:
+    - current epoch, loss/accuracy, status
+1. **Non-trivial file handling**
+- CSV upload + server-side validation and column mapping
+- Derived artifacts generation (processed preview + model.zip)
+1. **AI Chatbot Result Explanation**
+- Floating AI chatbot (bottom-right corner) available across Training, Archive, and Prediction pages
+- Context-aware: when viewing a specific training run, the chatbot can explain:
+    - metrics (accuracy, precision, recall, F1)
+    - confusion matrix interpretation
+    - learning curves (overfitting/underfitting)
+    - hyperparameter effects
+    - prediction confidence and token importance
+- Backend retrieves run data (metrics, hyperparameters, confusion matrix, curves) and sends structured context to the LLM
+- Strict per-user isolation: chatbot can only access the authenticated user’s training sessions
 
 
 ## Tentative Plan
