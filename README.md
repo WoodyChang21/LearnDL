@@ -115,16 +115,16 @@ DB stores only **metadata and file paths/URLs**, not raw binary blobs.
     - Hyperparameters (epochs, batch size, learning rate, fine-tune toggle)
     - “Start Training” button + training progress status
  
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/prediction.png)
+![Prediction Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/prediction.png)
  
 - **Prediction Page**
     - Model dropdown (user’s completed runs)
     - Text input area + Predict button
     - Output label + confidence (optionally token highlights)
  
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/archive_details.png)
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result.png)
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result2.png)
+![Archive Details](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/archive_details.png)
+![Training Result](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result.png)
+![Training Result2](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result2.png)
 
 - **Archive Page**
     - **Left sidebar**: per-user run history cards (model/dataset/date/accuracy)
