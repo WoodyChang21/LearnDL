@@ -35,60 +35,97 @@ We will use PostgreSQL (relational database) with the following schema design, a
 1. **Users**
 Stores authenticated user accounts.
 
-users
-- id (PK)
-- name
-- email (unique)
-- hashed_pwd
-- created_at
-- updated_at
+```
+  users
+  - id (PK)
+  - name
+  - email (unique)
+  - hashed_pwd
+  - created_at
+  - updated_at
+```
 
 2. **Training Sessions**
 Represents one complete training run (shown in Archive sidebar).
 
-training_sessions
-- id (PK)
-- user_id (FK → users.id)
-- model_name
-- chosen_model
-- hyper_params (JSON)
-- csv_url (S3 path)
-- model_url (S3 path)
-- figures_url (S3 base path)
-- created_at
+```
+  training_sessions
+  - id (PK)
+  - user_id (FK → users.id)
+  - model_name
+  - chosen_model
+  - hyper_params (JSON)
+  - csv_url (S3 path)
+  - model_url (S3 path)
+  - figures_url (S3 base path)
+  - created_at
+```
 
 3. **Dataset Storage (S3 – CSV files)**
 Datasets are stored in S3 as .csv.
 
-datasets
-- user_id (FK)
-- training_session_id (FK)
-- csv_url (S3 path)
+```
+  datasets
+  - user_id (FK)
+  - training_session_id (FK)
+  - csv_url (S3 path)
+```
 
 4. **Model Artifacts (S3 – .pt / .pth)**
 Trained models are packaged and stored in S3.
-
-models
-- user_id (FK)
-- training_session_id (FK)
-- model_name
-- hyper_params (JSON)
-- model_url (S3 path)
-- metrics (JSON)
+```
+  models
+  - user_id (FK)
+  - training_session_id (FK)
+  - model_name
+  - hyper_params (JSON)
+  - model_url (S3 path)
+  - metrics (JSON)
+```
 
 5. **Figures (S3 – .png or generated plots)**
 Visualization outputs (Ex. confusion matrix, learning curve) are generated after training and stored in S3.
-
-figures
-- user_id (FK)
-- training_session_id (FK)
-- conf_matrix_url (S3 path)
-- learning_curve_url (S3 path)
+```
+  figures
+  - user_id (FK)
+  - training_session_id (FK)
+  - conf_matrix_url (S3 path)
+  - learning_curve_url (S3 path)
+```
 
 #### 3. File Storage Requirements
 
+Use **S3-compatible object storage** for large files:
+
+- Uploaded CSV datasets (raw + processed)
+- Model artifacts packaged as `.zip`
+- Visualization figures
+
+DB stores only **metadata and file paths/URLs**, not raw binary blobs.
+
 
 #### 4. UI and Experience Design
+
+- **Training Page**
+    - Dataset dropdown (built-in + upload)
+    - Preprocessing toggles (lowercase, punctuation, stopwords, lemmatization optional)
+    - Model selection (BiLSTM+GloVe, DistilBERT, RoBERTa)
+    - Hyperparameters (epochs, batch size, learning rate, fine-tune toggle)
+    - “Start Training” button + training progress status
+ 
+- **Prediction Page**
+    - Model dropdown (user’s completed runs)
+    - Text input area + Predict button
+    - Output label + confidence (optionally token highlights)
+
+- **Archive Page**
+    - **Left sidebar**: per-user run history cards (model/dataset/date/accuracy)
+    - **Run detail** shows:
+        - Dataset summary
+        - First 10 samples table
+        - Hyperparameter configuration
+        - Training results (metrics cards + confusion matrix + learning curve)
+        - Download model zip
 
 
 #### 5. Planned Advanced Feature(At Least Two)
