@@ -68,6 +68,7 @@ Datasets are stored in S3 as .csv.
   datasets
   - user_id (FK)
   - training_session_id (FK)
+  - csv_name 
   - csv_url (S3 path)
 ```
 
