@@ -171,6 +171,67 @@ We will implement **at least two** (we plan 4 to be safe):
 
 
 ## Initial Independent Reasoning (Before using AI)
+### 1) Application structure and architecture
 
+We initially debated **Next.js full-stack vs separate frontend/backend**. We chose **separate React frontend + Express backend** because:
+
+- training jobs are long-running and benefit from a dedicated API + worker design
+- clearer separation for team parallel work (UI vs API vs training worker)
+
+### 2) Data and state design
+
+We planned:
+
+- PostgreSQL as the source of truth for users, datasets, runs, and results
+- Client state kept minimal (form state + selected run); everything else fetched via APIs
+- Archive view driven by `training_runs` list + `run_detail` endpoint
+- Files stored in S3 with DB storing only metadata + URLs
+
+### 3) Feature selection and scope decisions
+
+Core features decided first: Training → Results → Archive → Prediction.
+
+Advanced features chosen for learning value and feasibility:
+
+- auth (essential for per-user archive)
+- real-time progress (improves UX)
+- file processing (CSV validation + artifacts)
+
+We intentionally limited ML scope to avoid turning this into an ML research project.
+
+### 4) Anticipated challenges
+
+- Secure auth + ownership enforcement (prevent cross-user access)
+- Reliable job execution + progress streaming without UI freezing
+- Handling file uploads + large artifacts cleanly (storage + metadata consistency)
+- Integrating visualization data formats into reusable UI components
+
+### 5) Early collaboration plan
+
+We planned to divide by system boundaries (frontend/backend/worker) with weekly integration checkpoints:
+
+- API contracts defined early (request/response schemas)
+- backend provides mock responses while training pipeline is built
+- frontend builds UI against mock data, then switches to real endpoints
 
 ## AI Assistance Disclosure
+### Brief reflection on how AI contributed
+
+AI was used to accelerate proposal drafting and to sanity-check the architecture and schema completeness against the feature requirements.
+
+### 1) Which parts were developed without AI?
+
+- Original product idea (LearnDL), UI concept (Training/Prediction/Archive), and the archive sidebar requirement
+- Initial decision to prioritize educational visualizations (learning curve/confusion matrix/attention)
+
+### 2) If AI was used, what tasks did it help with?
+
+- Draft organization using the course-required headings
+- Concrete database schema mapping from UI requirements
+- Suggesting feasible real-time mechanisms (SSE vs WebSocket)
+- Risk/scoping suggestions (implement one model end-to-end first)
+
+### 3) One idea influenced by AI + team tradeoff discussion
+
+- **AI suggestion:** Use **SSE** for real-time training updates instead of full WebSockets.
+- **Team tradeoff decision:** We chose SSE because it is simpler to implement/debug and sufficient for one-way progress updates. If time permits, we can extend to WebSockets later, but SSE reduces risk within the course timeline.
