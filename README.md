@@ -20,10 +20,70 @@ Build a full-stack web application where authenticated users can upload/select a
 ### Core Technical Compnents
 
 #### 1. Technical Implementation
+We will use Next.js backend (TypeScript) + React (TypeScript) frontend:
+
+- **Prototype Design:** Figma
+- **Frontend:** React + TypeScript + TailwindCSS
+- **Backend:** Next.js + TypeScript REST API
+- **Database:** PostgreSQL
+- **Reason:** clean separation of concerns and easier async job orchestration (training pipeline) without mixing server actions into the UI layer.
 
 
 #### 2. Database Schema and Relationship
+We will use PostgreSQL (relational database) with the following schema design, aligned with the application workflow:
 
+1. **Users**
+Stores authenticated user accounts.
+
+users
+- id (PK)
+- name
+- email (unique)
+- hashed_pwd
+- created_at
+- updated_at
+
+2. **Training Sessions**
+Represents one complete training run (shown in Archive sidebar).
+
+training_sessions
+- id (PK)
+- user_id (FK → users.id)
+- model_name
+- chosen_model
+- hyper_params (JSON)
+- csv_url (S3 path)
+- model_url (S3 path)
+- figures_url (S3 base path)
+- created_at
+
+3. **Dataset Storage (S3 – CSV files)**
+Datasets are stored in S3 as .csv.
+
+datasets
+- user_id (FK)
+- training_session_id (FK)
+- csv_url (S3 path)
+
+4. **Model Artifacts (S3 – .pt / .pth)**
+Trained models are packaged and stored in S3.
+
+models
+- user_id (FK)
+- training_session_id (FK)
+- model_name
+- hyper_params (JSON)
+- model_url (S3 path)
+- metrics (JSON)
+
+5. **Figures (S3 – .png or generated plots)**
+Visualization outputs (Ex. confusion matrix, learning curve) are generated after training and stored in S3.
+
+figures
+- user_id (FK)
+- training_session_id (FK)
+- conf_matrix_url (S3 path)
+- learning_curve_url (S3 path)
 
 #### 3. File Storage Requirements
 
