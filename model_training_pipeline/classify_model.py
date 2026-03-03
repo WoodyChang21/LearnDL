@@ -24,7 +24,7 @@ class SentimentClassifier(nn.Module):
     outputs = self.bert_model.embed(input_ids, attention_mask)
     return outputs.hidden_states[-1]
 
-  
+
   def forward(self, input_ids, attention_mask):
     """
     The last_hidden shoul be a shape of [batch_size, seq_len, hidden_dim]

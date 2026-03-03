@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.router.model_config import router as model_config_router
 from api.router.model_output import router as model_output_router
-from api.router.train import router as train_router
+from api.router.model_train import router as model_train_router
 
 app = FastAPI()
 app.add_middleware(
@@ -10,7 +10,7 @@ app.add_middleware(
 )
 app.include_router(model_config_router, prefix="/api")
 app.include_router(model_output_router, prefix="/api")
-app.include_router(train_router, prefix="/api")
+app.include_router(model_train_router, prefix="/api")
 
 @app.get("/health_check")
 async def health_check():
@@ -21,3 +21,7 @@ async def health_check():
         "message": "GET Success",
     }
     return response
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)

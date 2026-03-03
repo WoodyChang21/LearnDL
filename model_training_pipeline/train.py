@@ -11,6 +11,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from model_training_pipeline.evaluation import evaluate
 
 
 def _validation_loss(
@@ -38,6 +39,7 @@ def _validation_loss(
 def run_training(
     train_loader: DataLoader,
     val_loader: DataLoader,
+    test_loader: DataLoader,
     user_id: str,
     training_session_id: str,
     config: dict[str, Any] = {},
@@ -125,29 +127,23 @@ def run_training(
             "val_acc": val_acc_list,
         })
 
-        return 
+        return evaluate(user_id, training_session_id, test_loader)
 
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
 if __name__ == "__main__":
     
-    from data_preprocess_pipeline.dataloader import datapreprocess_dataloader
+    from data_preprocess_pipeline.pipeline import preprocess_pipeline
     from model_training_pipeline.evaluation import evaluate
-    train_loader, val_loader, test_loader = datapreprocess_dataloader(data_path=None).split_data()
+    train_loader, val_loader, test_loader = preprocess_pipeline(data_path=None)
     user_id = "test_user"
     training_session_id = "test_session"
     config = {
         "learning_rate": 0.001,
-        "n_epochs": 10,
+        "n_epochs": 1,
         "hidden_neurons": 512,
         "dropout": 0.3,
     }
-    run_training(train_loader, val_loader, user_id, training_session_id, config)
-    metrics = evaluate(user_id, training_session_id, test_loader)
+    metrics = run_training(train_loader, val_loader, test_loader, user_id, training_session_id, config)
     print(metrics)
-
-    # Read learning curves from redis
-    from database.redis_client import get_learning_curves
-    curves = get_learning_curves(user_id, training_session_id)
-    print(curves)

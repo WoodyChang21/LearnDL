@@ -10,6 +10,10 @@ def read_data(path: str | Path = None):
     if path is None:
         path = Path(__file__).resolve().parent / "data.csv"
     df = pd.read_csv(path)
+
+    # For testing purposes, only read the first 100 rows
+    df = df.head(100)
+        
     X = df['input'].values
     y = df['output'].values
 

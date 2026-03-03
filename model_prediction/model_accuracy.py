@@ -2,8 +2,6 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from model_training_pipeline.classify_model import classify_model, SentimentClassifier
-from data_preprocess_pipeline.pipeline import train_loader, test_loader
-
 
 def get_accuracy(data_loader: DataLoader, model: SentimentClassifier):
     """ Compute the accuracy of the `model` across a dataset `data`
@@ -35,8 +33,3 @@ def get_accuracy(data_loader: DataLoader, model: SentimentClassifier):
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
     return correct / total
-
-if __name__ == "__main__":
-    # accuracy = get_accuracy(train_loader, classify_model)
-    # print(accuracy)
-    print(len(test_loader))
