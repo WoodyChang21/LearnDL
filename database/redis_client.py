@@ -90,36 +90,37 @@ def delete_learning_curves(user_id: str, training_session_id: str) -> None:
 
 if __name__ == "__main__":
 
-    # Test model retrieval and saving
-    user_id = "test_user"
-    training_session_id = "test_session"
+    # # Test model retrieval and saving
+    # user_id = "test_user"
+    # training_session_id = "test_session"
 
-    # Check whether the model state exists
-    model_state = get_model_state(user_id, training_session_id)
-    if model_state is None:
-        raise SystemExit("No model state found for this user/session. Train first.")
+    # # Check whether the model state exists
+    # model_state = get_model_state(user_id, training_session_id)
+    # if model_state is None:
+    #     raise SystemExit("No model state found for this user/session. Train first.")
 
-    from model_prediction.model_accuracy import get_accuracy
-    from model_training_pipeline.classify_model import SentimentClassifier
-    import torch
-    from data_preprocess_pipeline.dataloader import datapreprocess_dataloader
+    # from model_prediction.model_accuracy import get_accuracy
+    # from model_training_pipeline.classify_model import SentimentClassifier
+    # import torch
+    # from data_preprocess_pipeline.dataloader import datapreprocess_dataloader
 
-    # torch.load needs a seekable buffer, not raw bytes
-    state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
-    # Use saved config so architecture matches; fallback to defaults if missing
-    config = get_training_config(user_id, training_session_id) or {
-        "hidden_neurons": 512,
-        "dropout": 0.3,
-        "num_layers": 1,
-    }
-    model = SentimentClassifier(
-        n_classes=2,
-        hidden_neuron=config.get("hidden_neurons", 512),
-        dropout=config.get("dropout", 0.3),
-        num_layers=config.get("num_layers", 1),
-    ).to("cpu")
-    model.load_state_dict(state_dict)
-    model.eval()
-    test_loader = datapreprocess_dataloader(data_path=None).split_data()[2]
-    test_acc = get_accuracy(test_loader, model)
-    print(f"Test accuracy: {test_acc}")
+    # # torch.load needs a seekable buffer, not raw bytes
+    # state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
+    # # Use saved config so architecture matches; fallback to defaults if missing
+    # config = get_training_config(user_id, training_session_id) or {
+    #     "hidden_neurons": 512,
+    #     "dropout": 0.3,
+    #     "num_layers": 1,
+    # }
+    # model = SentimentClassifier(
+    #     n_classes=2,
+    #     hidden_neuron=config.get("hidden_neurons", 512),
+    #     dropout=config.get("dropout", 0.3),
+    #     num_layers=config.get("num_layers", 1),
+    # ).to("cpu")
+    # model.load_state_dict(state_dict)
+    # model.eval()
+    # test_loader = datapreprocess_dataloader(data_path=None).split_data()[2]
+    # test_acc = get_accuracy(test_loader, model)
+    # print(f"Test accuracy: {test_acc}")
+    print(get_learning_curves("test_user", "test_session"))

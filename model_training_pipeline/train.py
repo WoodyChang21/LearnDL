@@ -7,6 +7,7 @@ train concurrently.
 
 import io
 from typing import Any
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -88,7 +89,7 @@ def run_training(
             total_train_loss = 0.0
             n_train = 0
             train_acc = 0.0
-            for batch in train_loader:
+            for batch in tqdm(train_loader, total=len(train_loader)):
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
@@ -141,9 +142,10 @@ if __name__ == "__main__":
     training_session_id = "test_session"
     config = {
         "learning_rate": 0.001,
-        "n_epochs": 1,
-        "hidden_neurons": 512,
-        "dropout": 0.3,
+        "n_epochs": 5,
+        "hidden_neurons": 128,
+        "dropout": 0.1,
+        "num_layers": 1,
     }
     import time
     start_time = time.time()
