@@ -12,7 +12,7 @@ torchvision
 Pillow
 
 # Hugging Face
-transformers
+transformers==5.2.0
 datasets
 huggingface_hub
 tokenizers
