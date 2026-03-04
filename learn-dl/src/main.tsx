@@ -12,7 +12,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <PageLayout />,
     children: [
-  { index: true, Component: Training },
+      { index: true, Component: Training },
       { path: "prediction", Component: Prediction },
       { path: "archive", Component: Archives },]}])
 
