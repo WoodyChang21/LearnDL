@@ -7,11 +7,10 @@ router = APIRouter(tags=["model_output"])
 def _get_pipeline():
     """Lazy-load pipeline so the API can start without data.csv / BERT."""
     try:
-        from model_training_pipeline.classify_model import classify_model
         from model_prediction.model_output import get_model_output
         from model_prediction.model_accuracy import get_accuracy
         from data_preprocess_pipeline.pipeline import test_loader
-        return classify_model, get_model_output, get_accuracy, test_loader
+        return get_model_output, get_accuracy, test_loader
     except Exception as e:
         raise HTTPException(
             status_code=503,

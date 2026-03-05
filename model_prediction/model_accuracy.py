@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from model_training_pipeline.classify_model import classify_model, SentimentClassifier
+from model_training_pipeline.classify_model import SentimentClassifier
 
 def get_accuracy(data_loader: DataLoader, model: SentimentClassifier):
     """ Compute the accuracy of the `model` across a dataset `data`

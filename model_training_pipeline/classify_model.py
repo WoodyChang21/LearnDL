@@ -39,5 +39,3 @@ class SentimentClassifier(nn.Module):
     outputs = self.fc(out)
 
     return outputs
-
-classify_model = SentimentClassifier(n_classes=2)

@@ -17,13 +17,13 @@ class datapreprocess_dataloader():
     def __init__(self, batch_size=256, max_len=400, data_path: str = None):
         self.batch_size = batch_size
         self.max_len = max_len
-        _, self.X, self.y = read_data(path=data_path)
+        _, self.X, self.y, self.class_map, self.num_classes = read_data(path=data_path)
         self.data_dataset = CustomizeDataset(
             text=self.X,
             targets=self.y,
-            max_len=self.max_len,
             bert_model=bert_model,
-            batch_size=self.batch_size
+            batch_size=self.batch_size,
+            class_map=self.class_map
         )
 
     def split_data(self, batch_size=16):

@@ -14,6 +14,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from model_training_pipeline.evaluation import evaluate
 
+from model_training_pipeline.classify_model import SentimentClassifier
+from database.redis_client import save_model_state, save_training_config, save_learning_curves
+from model_prediction.model_accuracy import get_accuracy
+
 
 def _validation_loss(
     model: nn.Module,
@@ -50,9 +54,6 @@ def run_training(
     validation loss) to Redis for this user_id and training_session_id.
     Multiple users can call this concurrently; each has its own model instance.
     """
-    from model_training_pipeline.classify_model import SentimentClassifier
-    from database.redis_client import save_model_state, save_training_config, save_learning_curves
-    from model_prediction.model_accuracy import get_accuracy
 
     try:
         print("STARTING TRAINING")
@@ -62,10 +63,11 @@ def run_training(
         hidden_neurons = config.get("hidden_neurons", 512)
         dropout = config.get("dropout", 0.3)
         num_layers = config.get("num_layers", 1)
+        num_classes = config.get("num_classes", 2)
 
         # New instance per training run (no shared global model).
         model = SentimentClassifier(
-            n_classes=2,
+            n_classes=num_classes,
             hidden_neuron=hidden_neurons,
             dropout=dropout,
             num_layers=num_layers,
@@ -123,7 +125,6 @@ def run_training(
             buffer = io.BytesIO()
             torch.save(best_state_dict, buffer)
             save_model_state(user_id, training_session_id, buffer.getvalue())
-            save_training_config(user_id, training_session_id, config)
         
         save_learning_curves(user_id, training_session_id, {
             "train_err": train_err,
@@ -141,7 +142,9 @@ if __name__ == "__main__":
     
     from data_preprocess_pipeline.pipeline import preprocess_pipeline
     from model_training_pipeline.evaluation import evaluate
+    from data.read_data import read_data
     train_loader, val_loader, test_loader = preprocess_pipeline(data_path=None)
+    _, _, _, class_map, num_classes = read_data(path=None)
     user_id = "test_user"
     training_session_id = "test_session"
     config = {
@@ -150,9 +153,11 @@ if __name__ == "__main__":
         "hidden_neurons": 128,
         "dropout": 0.1,
         "num_layers": 1,
+        "num_classes": num_classes
     }
     import time
     start_time = time.time()
+    save_training_config(user_id, training_session_id, config)
     metrics = run_training(train_loader, val_loader, test_loader, user_id, training_session_id, config)
     end_time = time.time()
     print(f"Time taken: {end_time - start_time} seconds")

@@ -27,10 +27,10 @@ def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentCl
     state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
     config = get_training_config(user_id, training_session_id) or {}
     model = SentimentClassifier(
-        n_classes=2,
+        n_classes=config.get("num_classes", 2),
         hidden_neuron=config.get("hidden_neurons", 512),
         dropout=config.get("dropout", 0.3),
-        num_layers=config.get("num_layers", 1),
+        num_layers=config.get("num_layers", 1)
     )
     model.load_state_dict(state_dict)
     model.eval()
