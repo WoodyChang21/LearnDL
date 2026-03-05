@@ -112,6 +112,7 @@ def run_training(
             train_acc_list.append(train_acc / n_train)
             val_acc = get_accuracy(val_loader, model)
             val_acc_list.append(val_acc)
+            print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Train Acc: {train_acc_list[-1]:.4f}, Val Acc: {val_acc_list[-1]:.4f}")
 
             if val_acc > best_val_acc:
                 best_state_dict = {k: v.cpu().clone() for k, v in model.state_dict().items()}

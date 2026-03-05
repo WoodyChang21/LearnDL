@@ -28,7 +28,9 @@ class datapreprocess_dataloader():
 
     def split_data(self, batch_size=16):
         n_total = len(self.data_dataset)
-        n_train, n_val, n_test = int(0.8 * n_total), int(0.1 * n_total), int(0.1 * n_total)
+        n_train = int(0.8 * n_total)
+        n_val = int(0.1 * n_total)
+        n_test = n_total - n_train - n_val  # absorb rounding so sum equals n_total
         train_dataset, val_dataset, test_dataset = random_split(
             self.data_dataset, 
             [n_train, n_val, n_test])
