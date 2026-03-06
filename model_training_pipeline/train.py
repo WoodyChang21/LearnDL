@@ -60,6 +60,7 @@ def run_training(
         print("STARTING TRAINING")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         lr = config.get("learning_rate", 0.001)
+        
         n_epochs = int(config.get("n_epochs", 5))
         hidden_neurons = config.get("hidden_neurons", 512)
         dropout = config.get("dropout", 0.3)
@@ -149,6 +150,7 @@ if __name__ == "__main__":
     from data.read_data import read_data
 
     _, _, _, class_map, num_classes = read_data(path=None)
+    
     config = {
         "learning_rate": 0.001,
         "n_epochs": 1,
@@ -156,7 +158,6 @@ if __name__ == "__main__":
         "dropout": 0.1,
         "num_layers": 1,
         "num_classes": num_classes,
-        # "bert_model": distilbert_model
         "bert_model": "distilbert_model"
     }
 

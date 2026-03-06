@@ -8,8 +8,9 @@ import torch
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from model_training_pipeline.classify_model import SentimentClassifier
 
+from model_training_pipeline.classify_model import SentimentClassifier
+from model_training_pipeline.embed_model import bert_model, distilbert_model
 
 def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentClassifier:
     """
@@ -26,11 +27,13 @@ def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentCl
 
     state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
     config = get_training_config(user_id, training_session_id) or {}
+    bert_model = bert_model if config.get("bert_model", "bert") == "bert" else distilbert_model
     model = SentimentClassifier(
         n_classes=config.get("num_classes", 2),
         hidden_neuron=config.get("hidden_neurons", 512),
         dropout=config.get("dropout", 0.3),
-        num_layers=config.get("num_layers", 1)
+        num_layers=config.get("num_layers", 1),
+        bert_model=bert_model
     )
     model.load_state_dict(state_dict)
     model.eval()
