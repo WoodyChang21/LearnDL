@@ -5,6 +5,7 @@ import { Training } from './pages/Training.tsx';
 import { Archives } from './pages/Archives.tsx';
 import { Prediction } from './pages/Prediction.tsx';
 import { PageLayout } from './layouts/PageLayout.tsx';
+import { AuthProvider } from './context/AuthContext.tsx';
 import './index.css';
 
 const router = createBrowserRouter([
@@ -18,6 +19,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </StrictMode>,
 )

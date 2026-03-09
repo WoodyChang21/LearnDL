@@ -30,7 +30,27 @@ export function Training() {
   const [progress, setProgress] = useState(0);
   const [hasResults, setHasResults] = useState(false);
 
-  const startTraining = () => {
+  const startTraining = async () => {
+    // const response = await fetch("/api/train", {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify({
+    //     dataset,
+    //     model,
+    //     epochs,
+    //     batchSize,
+    //     learningRate,
+    //     fineTune,
+    //     trainSplit: trainSplit[0],
+    //     lowercase,
+    //     removePunctuation,
+    //     removeStopwords,
+    //     lemmatization,
+    //   }),
+    // });
+
     if (!dataset) {
       alert("Please select a dataset");
       return;
