@@ -204,24 +204,24 @@ if __name__ == "__main__":
 
     # These should be loaded from the frontend
     training_config = TrainingConfig(
-        learning_rate=3e-5,
-        n_epochs=20,
-        batch_size=8,
-        eval_step=1
+        learning_rate=1e-4,
+        n_epochs=5,
+        batch_size=16,
+        eval_step=2
     )
     classifier_config = ClassifierConfig(
-        hidden_neurons=128,
+        hidden_neurons=64,
         dropout=0.2,
         num_classes=None,
-        classifier_type="LINEAR"
+        classifier_type="GRU"
     )
     embed_model_config = EmbedModelConfig(
         embed_model="bert_model",
-        fine_tune_mode="unfreeze_last_n_layers",
-        unfreeze_last_n_layers=1
+        fine_tune_mode="freeze_all"
+        # unfreeze_last_n_layers=1
     )
     data_config = DataConfig(
-        data_path="data/News.csv",
+        data_path="data/IMDB.csv",
         lowercase=False,
         remove_punctuation=False,
         remove_stopwords=False,
