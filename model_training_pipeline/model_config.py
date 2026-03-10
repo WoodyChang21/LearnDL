@@ -13,3 +13,4 @@ class TrainingConfig(BaseModel):
     num_layers: int = Field(1, ge=1, le=4)
     num_classes: int | None = Field(default=None, ge=1)
     embed_model: Literal[*MODEL_NAMES.keys()] = Field("bert_model", description="Key in MODEL_NAMES")
+    freeze_base_model: bool = Field(True, description="Freeze the base model")

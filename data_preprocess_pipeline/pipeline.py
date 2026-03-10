@@ -1,11 +1,11 @@
 from data_preprocess_pipeline.dataloader import DataPreprocessDataLoader
-from model_training_pipeline.embed_model import BERT, DISTILBERT
+from model_training_pipeline.embed_model import EMBED_MODEL_TYPES, DISTILBERT, BERT
 from data_preprocess_pipeline.data_config import DataConfig
 import time
 
 
 
-def preprocess_pipeline(bert_model: BERT | DISTILBERT = None, data_config: DataConfig = None):
+def preprocess_pipeline(bert_model: EMBED_MODEL_TYPES = None, data_config: DataConfig = None):
     print("Preprocessing data...")
     data_loader_class = DataPreprocessDataLoader(bert_model=bert_model, data_config=data_config)
     train_loader, val_loader, test_loader = data_loader_class.split_data()

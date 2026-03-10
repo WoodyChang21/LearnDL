@@ -1,6 +1,6 @@
 import io
 from model_training_pipeline.classify_model import SentimentClassifier
-from model_training_pipeline.embed_model import MODEL_NAMES
+from model_training_pipeline.embed_model import MODEL_NAMES, MODEL_INSTANCES
 from model_training_pipeline.model_config import TrainingConfig
 import torch
 import torch.nn.functional as F
@@ -21,7 +21,7 @@ def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentCl
 
     state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
     config: TrainingConfig = get_training_config(user_id, training_session_id) or TrainingConfig()
-    embed_model = MODEL_NAMES[config.embed_model]
+    embed_model = MODEL_NAMES[config.embed_model](model_name=MODEL_INSTANCES[config.embed_model], freeze_base_model=config.freeze_base_model)
     model = SentimentClassifier(
         n_classes=config.num_classes, 
         hidden_neuron=config.hidden_neurons, 
@@ -30,19 +30,19 @@ def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentCl
         bert_model=embed_model)
     model.load_state_dict(state_dict)
     model.eval()
-    return model
+    return model, embed_model
 
 def get_model_output(user_input: str, user_id: str | None = None, training_session_id: str | None = None):    
     # Deffine the model
     model= None
     if user_id is not None and training_session_id is not None:
-        model = load_model_from_redis(user_id, training_session_id)
+        model, embed_model = load_model_from_redis(user_id, training_session_id)
     else:
         raise ValueError("User ID and training session ID are required")
 
     with torch.no_grad():
-        encoding = MODEL_NAMES["bert_model"].tokenize(user_input)
-        input_ids, attention_mask = encoding["input_ids"].to(DEVICE), encoding["attention_mask"].to(DEVICE)
+        encoding = embed_model.tokenize(user_input, max_length=embed_model.bert_model.config.max_position_embeddings)
+        input_ids, attention_mask = torch.tensor(encoding["input_ids"], dtype=torch.long).to(DEVICE), torch.tensor(encoding["attention_mask"], dtype=torch.long).to(DEVICE)
         outputs = model(input_ids, attention_mask)
         probs = F.softmax(outputs, dim=1)
         predicted = outputs.argmax(dim=1)

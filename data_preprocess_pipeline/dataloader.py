@@ -7,6 +7,7 @@ from data_preprocess_pipeline.dataset import CustomizeDataset
 from torch.utils.data import Dataset, DataLoader, Subset
 import torch
 from sklearn.model_selection import train_test_split
+from transformers import DataCollatorWithPadding
 
 # Model
 from model_training_pipeline.embed_model import EMBED_MODEL_TYPES
@@ -23,11 +24,13 @@ class DataPreprocessDataLoader():
     def __init__(self, data_config: DataConfig, bert_model: EMBED_MODEL_TYPES = None):
         if bert_model is None:
             raise ValueError("BERT model is required")
+        self.tokenizer = bert_model.tokenizer
+        self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
         _, self.X, self.y, self.class_map, self.num_classes = read_data(path=data_config.data_path)
         self.train_ratio = data_config.train_ratio
         self.test_ratio = data_config.test_ratio
         self.val_ratio = self.test_ratio / (1 - self.test_ratio)
-
+        self.batch_size = data_config.batch_size
         self.stratify = data_config.stratify
         self.data_dataset = CustomizeDataset(
             text=self.X,
@@ -36,7 +39,7 @@ class DataPreprocessDataLoader():
             bert_model=bert_model,
         )
 
-    def split_data(self, batch_size: int = 256):
+    def split_data(self):
         n_total = len(self.data_dataset)
         indices = list(range(n_total))
         y_stratify = self.y if self.stratify else None
@@ -53,16 +56,19 @@ class DataPreprocessDataLoader():
 
         # DataLoaders run on CPU; use pin_memory for faster CPU->GPU when using CUDA
         train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True,
+            train_dataset, batch_size=self.batch_size, shuffle=True,
             pin_memory=(DEVICE == "cuda"),
+            collate_fn=self.data_collator,
         )
         val_loader = DataLoader(
-            val_dataset, batch_size=batch_size, shuffle=False,
+            val_dataset, batch_size=self.batch_size, shuffle=False,
             pin_memory=(DEVICE == "cuda"),
+            collate_fn=self.data_collator,
         )
         test_loader = DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=False,
+            test_dataset, batch_size=self.batch_size, shuffle=False,
             pin_memory=(DEVICE == "cuda"),
+            collate_fn=self.data_collator,
         )
 
         return train_loader, val_loader, test_loader

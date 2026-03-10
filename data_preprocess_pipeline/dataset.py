@@ -25,51 +25,22 @@ class CustomizeDataset(Dataset):
         self.targets: list[str] = targets
         self.class_map = class_map
         self.bert_model = bert_model
-        self.max_length = self._get_max_length()
-
-    def _get_max_length(self):
-
-        model_max_len = self.bert_model.bert_model.config.max_position_embeddings
-
-        lengths = [
-            len(self.bert_model.tokenizer.encode(text, add_special_tokens=True, truncation=False))
-            for text in tqdm(self.texts, desc="Tokenizing to get input lengths")
-        ]
-
-        p95 = np.percentile(lengths, 95)
-
-        # Cap to model limit
-        if p95 >= model_max_len:
-            return model_max_len
-
-        # Standard bucket sizes
-        buckets = [64, 128, 256, 512, 1024, 2048, 4096]
-
-        for n in buckets:
-            if p95 <= n and n <= model_max_len:
-                return n
-
-        return model_max_len
+        self.max_length = self.bert_model.bert_model.config.max_position_embeddings
     
     def __len__(self): #this is needed since the parent class is Dataset
         return len(self.texts)
 
     
     def __getitem__(self, idx):  # This is needed since the parent class is Dataset
-        """
-        Returns a dictionary with:
-          - 'input_ids'      : token ids (long tensor)
-          - 'attention_mask' : attention mask (long tensor)
-          - 'labels'         : 0 or 1 (long tensor)
-        """
-        text = str(self.texts[idx])
+        
+        text = self.texts[idx]
         target = self.class_map["label_to_id"][self.targets[idx]]
 
         enc = self.bert_model.tokenize(text, max_length=self.max_length)
  
         return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
+            "input_ids": torch.tensor(enc["input_ids"], dtype=torch.long),
+            "attention_mask": torch.tensor(enc["attention_mask"], dtype=torch.long),
             "labels": torch.tensor(target, dtype=torch.long),
         }
 

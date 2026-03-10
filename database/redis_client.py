@@ -147,4 +147,4 @@ if __name__ == "__main__":
     # test_loader = datapreprocess_dataloader(data_path=None).split_data()[2]
     # test_acc = get_accuracy(test_loader, model)
     # print(f"Test accuracy: {test_acc}")
-    print(get_learning_curves("test_user", "test_session"))
+    print(save_training_status("test_user", "test_session", False))

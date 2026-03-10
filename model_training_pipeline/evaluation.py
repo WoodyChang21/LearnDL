@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 from model_training_pipeline.classify_model import SentimentClassifier
-from model_training_pipeline.embed_model import MODEL_NAMES
+from model_training_pipeline.embed_model import MODEL_NAMES, MODEL_INSTANCES
 from model_training_pipeline.model_config import TrainingConfig
 
 def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentClassifier:
@@ -28,7 +28,7 @@ def load_model_from_redis(user_id: str, training_session_id: str) -> SentimentCl
 
     state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
     config: TrainingConfig = get_training_config(user_id, training_session_id) or TrainingConfig()
-    embed_model = MODEL_NAMES[config.embed_model]
+    embed_model = MODEL_NAMES[config.embed_model](model_name=MODEL_INSTANCES[config.embed_model], freeze_base_model=config.freeze_base_model)
     model = SentimentClassifier(
         n_classes=config.num_classes, 
         hidden_neuron=config.hidden_neurons, 
@@ -83,12 +83,11 @@ def evaluate(
     y_true = all_labels
     y_pred = all_preds
 
-    # Binary: 0 = negative, 1 = positive; use zero_division=0 to avoid undefined when no positive preds
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, average="micro", zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, average="micro", zero_division=0)),
-        "f1_score": float(f1_score(y_true, y_pred, average="micro", zero_division=0)),
+        "precision": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
+        "f1_score": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
     }
 
 
