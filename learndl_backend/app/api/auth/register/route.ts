@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/firebase-admin";
+import { handleCorsPreflight, withCors } from "@/lib/cors";
+
+export function OPTIONS(req: NextRequest) {
+  return handleCorsPreflight(req);
+}
 
 export async function POST(req: NextRequest) {
   try {
+    console.log(req.body);
     const authHeader = req.headers.get("authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { error: "Missing or invalid token" },
-        { status: 401 }
+      return withCors(
+        NextResponse.json(
+          { error: "Missing or invalid token" },
+          { status: 401 }
+        ),
+        req
       );
     }
 
@@ -21,9 +30,12 @@ export async function POST(req: NextRequest) {
     const name = decodedToken.name || null;
 
     if (!email) {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
+      return withCors(
+        NextResponse.json(
+          { error: "Email is required" },
+          { status: 400 }
+        ),
+        req
       );
     }
 
@@ -32,9 +44,12 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { message: "User already exists", user: existingUser },
-        { status: 200 }
+      return withCors(
+        NextResponse.json(
+          { message: "User already exists", user: existingUser },
+          { status: 200 }
+        ),
+        req
       );
     }
 
@@ -46,16 +61,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      { message: "User registered successfully", user },
-      { status: 201 }
+    return withCors(
+      NextResponse.json(
+        { message: "User registered successfully", user },
+        { status: 201 }
+      ),
+      req
     );
   } catch (error) {
     console.error("Register error:", error);
 
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+    return withCors(
+      NextResponse.json(
+        { error: "Internal server error" },
+        { status: 500 }
+      ),
+      req
     );
   }
 }
