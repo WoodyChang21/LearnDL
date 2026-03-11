@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { loginUser } from "../auth/authService"
-import { useAuth } from "../auth/AuthContext"
+import { useAuth } from "../auth/useAuth"
 import { useNavigate } from "react-router"
 import { Lock, Mail } from "lucide-react"
 
@@ -16,9 +16,9 @@ const LoginForm = () => {
 
     try {
       const data = await loginUser(email, password)
-      login(data.accessToken)
+      login(data.accessToken, data.user)
       navigate("/training")
-    } catch (err) {
+    } catch {
       alert("Login failed")
     }
   }

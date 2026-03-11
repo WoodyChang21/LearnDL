@@ -2,7 +2,11 @@ import { useState } from "react"
 import { signupUser } from "../auth/authService"
 import { Lock, Mail, User } from "lucide-react"
 
-const SignupForm = () => {
+interface SignupFormProps {
+  onSuccess?: () => void
+}
+
+const SignupForm = ({ onSuccess }: SignupFormProps) => {
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -12,8 +16,9 @@ const SignupForm = () => {
 
     try {
       await signupUser(username, email, password)
+      onSuccess?.()
       alert("Account created! Please login.")
-    } catch (err) {
+    } catch {
       alert("Signup failed")
     }
   }

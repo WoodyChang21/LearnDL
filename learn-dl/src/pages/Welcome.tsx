@@ -1,5 +1,5 @@
 import { Navigate } from "react-router"
-import { useAuth } from "../auth/AuthContext"
+import { useAuth } from "../auth/useAuth"
 import LoginForm from "../components/LoginForm"
 import { Card } from "@radix-ui/themes"
 import { Brain } from "lucide-react"
@@ -9,7 +9,15 @@ import { useState } from "react"
 
 const WelcomePage = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isAuthLoading } = useAuth()
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 text-sm text-gray-500">
+        Checking session...
+      </div>
+    )
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/training" />
@@ -38,7 +46,7 @@ const WelcomePage = () => {
                 ? "Enter your credentials to access your account"
                 : "Sign up to start training your models"}
             </p>
-            {isLogin ? <LoginForm /> : <SignupForm />}
+            {isLogin ? <LoginForm /> : <SignupForm onSuccess={() => setIsLogin(true)} />}
         </Card>
 
         <div className="mt-6 text-center">

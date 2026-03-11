@@ -5,6 +5,7 @@ import { SelectedCard, type SelectedCardOption } from "../components/SelectedCar
 import { PreprocessingCard } from "../components/PreprocessingCard";
 import { ModelParamsCard } from "../components/ModelParamsCard";
 import { TrainingResult } from "../components/TrainingResult";
+import { readStoredTrainingRuns } from "../utils/trainingRuns";
 
 const TEST_DATASET_OPTIONS: SelectedCardOption[] = [
   { value: "imdb", label: "IMDB Sentiment" },
@@ -105,7 +106,7 @@ export function Training() {
             },
           };
           
-          const existingModels = JSON.parse(localStorage.getItem("trainedModels") || "[]");
+          const existingModels = readStoredTrainingRuns();
           existingModels.unshift(trainedModel);
           localStorage.setItem("trainedModels", JSON.stringify(existingModels));
           

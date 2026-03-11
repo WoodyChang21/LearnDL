@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Download, Calendar } from "lucide-react";
+import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
 
 const trainingData = [
   { id: 1, text: "I loved this movie", label: "Positive" },
@@ -15,17 +16,10 @@ const trainingData = [
 ];
 
 export function Archives() {
-  const [trainingRuns, setTrainingRuns] = useState<any[]>([]);
-  const [selectedRun, setSelectedRun] = useState<any>(null);
-
-  useEffect(() => {
-    // Load trained models from localStorage
-    const models = JSON.parse(localStorage.getItem("trainedModels") || "[]");
-    setTrainingRuns(models);
-    if (models.length > 0 && !selectedRun) {
-      setSelectedRun(models[0]);
-    }
-  }, []);
+  const [trainingRuns] = useState<TrainingRun[]>(readStoredTrainingRuns);
+  const [selectedRun, setSelectedRun] = useState<TrainingRun | null>(
+    () => readStoredTrainingRuns()[0] ?? null
+  );
 
   const getModelDisplayName = (modelCode: string) => {
     const names: Record<string, string> = {

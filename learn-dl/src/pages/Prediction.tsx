@@ -1,25 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import * as Select from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
+import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
 
 export function Prediction() {
-  const [trainedModels, setTrainedModels] = useState<any[]>([]);
-  const [selectedModel, setSelectedModel] = useState("");
+  const [trainedModels] = useState<TrainingRun[]>(readStoredTrainingRuns);
+  const [selectedModel, setSelectedModel] = useState(
+    () => readStoredTrainingRuns()[0]?.name ?? ""
+  );
   const [inputText, setInputText] = useState("I really loved this product, highly recommended!");
   const [prediction, setPrediction] = useState<{
     label: string;
     confidence: number;
     probabilities: { label: string; value: number }[];
   } | null>(null);
-
-  useEffect(() => {
-    // Load trained models from localStorage
-    const models = JSON.parse(localStorage.getItem("trainedModels") || "[]");
-    setTrainedModels(models);
-    if (models.length > 0 && !selectedModel) {
-      setSelectedModel(models[0].name);
-    }
-  }, []);
 
   const handlePredict = () => {
     // Mock prediction
