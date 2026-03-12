@@ -211,17 +211,17 @@ if __name__ == "__main__":
     )
     classifier_config = ClassifierConfig(
         hidden_neurons=64,
-        dropout=0.2,
+        dropout=0.1,
         num_classes=None,
         classifier_type="LINEAR"
     )
     embed_model_config = EmbedModelConfig(
         embed_model="bert_model",
-        fine_tune_mode="freeze_all"
+        fine_tune_mode="unfreeze_all"
         # unfreeze_last_n_layers=1
     )
     data_config = DataConfig(
-        data_path="data/IMDB.csv",
+        data_path="data/News.csv",
         lowercase=False,
         remove_punctuation=False,
         remove_stopwords=False,
