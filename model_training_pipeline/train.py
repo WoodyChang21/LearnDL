@@ -204,16 +204,16 @@ if __name__ == "__main__":
 
     # These should be loaded from the frontend
     training_config = TrainingConfig(
-        learning_rate=1e-4,
+        learning_rate=2e-5,
         n_epochs=5,
-        batch_size=16,
+        batch_size=8,
         eval_step=2
     )
     classifier_config = ClassifierConfig(
         hidden_neurons=64,
         dropout=0.2,
         num_classes=None,
-        classifier_type="GRU"
+        classifier_type="LINEAR"
     )
     embed_model_config = EmbedModelConfig(
         embed_model="bert_model",
