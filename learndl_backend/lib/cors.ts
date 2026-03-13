@@ -24,22 +24,28 @@ function getAllowedOrigin(origin: string | null) {
   return getAllowedOrigins().includes(origin) ? origin : null;
 }
 
-export function getCorsHeaders(request: NextRequest) {
+function buildCorsHeaders(origin: string, requestedHeaders: string): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": requestedHeaders,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+export function getCorsHeaders(request: NextRequest): Record<string, string> {
   const origin = getAllowedOrigin(request.headers.get("origin"));
   const requestedHeaders =
     request.headers.get("access-control-request-headers") ??
     "Content-Type, Authorization";
 
-  return origin
-    ? {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": requestedHeaders,
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
-        Vary: "Origin",
-      }
-    : {};
+  if (!origin) {
+    return {};
+  }
+
+  return buildCorsHeaders(origin, requestedHeaders);
 }
 
 export function withCors(response: NextResponse, request: NextRequest) {
