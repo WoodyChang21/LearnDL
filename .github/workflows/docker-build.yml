@@ -2,7 +2,7 @@ name: Build, Push, and Deploy to Runpod
 
 on:
   push:
-    branches: [pipeline-testing]
+    branches: [main]
   workflow_dispatch:
 
 env:

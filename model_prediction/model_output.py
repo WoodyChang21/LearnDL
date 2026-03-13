@@ -1,18 +1,32 @@
 import io
-from database.redis_client import load_model_from_redis
 import torch
 import torch.nn.functional as F
+from model_training_pipeline.model_config import ModelConfig
+from model_training_pipeline.embed_model import load_embed_model
+from cloud_storage.storage_manager import cloud_storage_manager
+from model_training_pipeline.classify_model import Classifier
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def get_model_output(user_input: str, user_id: str | None = None, training_session_id: str | None = None):    
+def get_model_output(
+    user_input: str, 
+    user_id: str, 
+    training_session_id: str,
+    model_name: str,
+    config: ModelConfig
+    ):    
     # Deffine the model
-    model= None
-    if user_id is not None and training_session_id is not None:
-        model, embed_model = load_model_from_redis(user_id, training_session_id)
-    else:
-        raise ValueError("User ID and training session ID are required")
+    classifier_config = config.classifier_config
+    embed_model_config = config.embed_model_config
+    embed_model = load_embed_model(embed_model_config)
+    model = Classifier(embed_model, classifier_config).to(DEVICE)
+    
+    # Load the model state
+    model_state = cloud_storage_manager.read_bytes(user_id, training_session_id, f"{model_name}.pth")
+    best_state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
+    model.load_state_dict(best_state_dict)
+    model.eval()
 
     with torch.no_grad():
         encoding = embed_model.tokenize(user_input)

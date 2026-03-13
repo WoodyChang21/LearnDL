@@ -73,3 +73,5 @@ class SpaceStorageManager:
             ExtraArgs={'ContentType': 'image/png'} 
         )
         return key
+
+cloud_storage_manager = SpaceStorageManager()

@@ -18,6 +18,7 @@ from model_training_pipeline.classify_model import Classifier
 from database.redis_client import *
 from model_training_pipeline.model_config import TrainingConfig, ClassifierConfig, EmbedModelConfig, ModelConfig
 from transformers import get_linear_schedule_with_warmup
+from cloud_storage.storage_manager import cloud_storage_manager
 
 
 def _validation_metrics(
@@ -66,6 +67,7 @@ def run_training(
     test_loader: DataLoader,
     user_id: str,
     training_session_id: str,
+    model_name: str,
     training_config: TrainingConfig = TrainingConfig(),
     classifier_config: ClassifierConfig = ClassifierConfig(),
     embed_model_config: EmbedModelConfig = EmbedModelConfig(),
@@ -74,14 +76,13 @@ def run_training(
     Create a new SentimentClassifier, train it, and save the best state (by
     validation loss) to Redis for this user_id and training_session_id.
     Multiple users can call this concurrently; each has its own model instance.
-    """
+    """  
 
     if get_training_status(user_id, training_session_id) is True:
         return {"status": "error", "error": "Training already in progress"}
     
     save_training_status(user_id, training_session_id, True)    
-    save_training_config(user_id, training_session_id, ModelConfig(classifier_config=classifier_config, embed_model_config=embed_model_config))
-
+    
     try:
         print("STARTING TRAINING")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -175,9 +176,14 @@ def run_training(
 
         # Persist best state, config, and learning curves to Redis.
         if best_state_dict is not None:
+            # First load the best state
+            model.load_state_dict(best_state_dict)
             buffer = io.BytesIO()
             torch.save(best_state_dict, buffer)
-            save_model_state(user_id, training_session_id, buffer.getvalue())
+            
+            # Upload to Cloud Storage
+            cloud_storage_manager.upload_bytes(buffer.getvalue(), user_id, training_session_id, f"{model_name}.pth")
+            # save_model_state(user_id, training_session_id, buffer.getvalue())
         
         save_training_status(user_id, training_session_id, False)
         save_learning_curves(user_id, training_session_id, {
@@ -187,7 +193,7 @@ def run_training(
             "val_acc": val_acc_list,
         })
 
-        evaluate_metrics = evaluate(user_id, training_session_id, test_loader)
+        evaluate_metrics = evaluate(model, test_loader)
         return {
             "status": "success",
             "metrics": evaluate_metrics,
@@ -261,7 +267,6 @@ if __name__ == "__main__":
     # print(metrics)
 
     # ==== save random model weights ====
-    from database.redis_client import save_model_state, get_model_state
     from cloud_storage.storage_manager import SpaceStorageManager
     storage_manager = SpaceStorageManager()
     # embed_model = load_embed_model(embed_model_config)
