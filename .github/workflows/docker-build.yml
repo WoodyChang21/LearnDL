@@ -47,8 +47,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Wait for Docker Hub tag propagation
+        run: sleep 60
+        
       - name: Set deployment image
-        run: echo "DEPLOY_IMAGE=${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}" >> $GITHUB_ENV
+        run: echo "DEPLOY_IMAGE=${IMAGE_NAME}:latest" >> $GITHUB_ENV
 
       - name: Find existing pod(s) with same name
         id: find_pods
