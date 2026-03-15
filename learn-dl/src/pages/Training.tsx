@@ -5,6 +5,7 @@ import { SelectedCard, type SelectedCardOption } from "../components/SelectedCar
 import { PreprocessingCard } from "../components/PreprocessingCard";
 import { ModelParamsCard } from "../components/ModelParamsCard";
 import { TrainingResult } from "../components/TrainingResult";
+import type { TrainingVisualizationData } from "../components/TrainingVisualizations";
 import { readStoredTrainingRuns } from "../utils/trainingRuns";
 
 const TEST_DATASET_OPTIONS: SelectedCardOption[] = [
@@ -13,6 +14,46 @@ const TEST_DATASET_OPTIONS: SelectedCardOption[] = [
   { value: "agnews", label: "AG News" },
   { value: "csv", label: "Upload CSV" },
 ];
+
+const DUMMY_VISUALIZATION_DATA: TrainingVisualizationData = {
+  metrics: {
+    accuracy_pct: 91.8,
+    precision_pct: 89.3,
+    recall_pct: 93.1,
+    f1_score_pct: 91.2,
+  },
+  confusion_matrix: {
+    labels: ["Negative", "Positive"],
+    matrix: [
+      [470, 30],
+      [50, 450],
+    ],
+    normalize: false,
+  },
+  learning_curves: {
+    x: [1, 2, 3, 4],
+    train_loss: [0.65, 0.42, 0.28, 0.18],
+    val_loss: [0.58, 0.4, 0.31, 0.25],
+    train_acc: [0.72, 0.83, 0.89, 0.93],
+    val_acc: [0.75, 0.84, 0.89, 0.92],
+  },
+  attention_visualization: {
+    text: "The movie was absolutely wonderful and touching.",
+    tokens: ["The", "movie", "was", "absolutely", "wonderful", "and", "touching", "."],
+    scores: [0.06, 0.08, 0.05, 0.15, 0.28, 0.07, 0.24, 0.07],
+  },
+  embedding_2d: {
+    points: [
+      { x: 52.1, y: 41.2, label: "Positive", text: "Loved this film." },
+      { x: 57.4, y: 49.8, label: "Positive", text: "Great acting and story." },
+      { x: 61.3, y: 36.7, label: "Positive", text: "Amazing plot twists." },
+      { x: 45.8, y: 28.4, label: "Negative", text: "Boring and too long." },
+      { x: 38.6, y: 22.9, label: "Negative", text: "Not worth watching." },
+      { x: 31.9, y: 34.1, label: "Negative", text: "Poor script and pacing." },
+    ],
+    legend: ["Positive", "Negative"],
+  },
+};
 
 export function Training() {
   const [dataset, setDataset] = useState("");
@@ -30,6 +71,7 @@ export function Training() {
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hasResults, setHasResults] = useState(false);
+  const [visualizationData, setVisualizationData] = useState<TrainingVisualizationData | null>(null);
 
   const startTraining = async () => {
     // const response = await fetch("/api/train", {
@@ -74,6 +116,8 @@ export function Training() {
     
     setIsTraining(true);
     setProgress(0);
+    setHasResults(false);
+    setVisualizationData(null);
     
     const interval = setInterval(() => {
       setProgress((prev) => {
@@ -81,6 +125,7 @@ export function Training() {
           clearInterval(interval);
           setIsTraining(false);
           setHasResults(true);
+          setVisualizationData(DUMMY_VISUALIZATION_DATA);
           
           // Save trained model to localStorage
           const trainedModel = {
@@ -240,7 +285,7 @@ export function Training() {
         </div>
       </div>
 
-      <TrainingResult hasResults={hasResults} />
+      <TrainingResult hasResults={hasResults} visualizationData={visualizationData} />
     </div>
   );
 }
