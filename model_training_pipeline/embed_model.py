@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, OrderedDict
 from transformers import (
     BertModel, BertTokenizer,
     DistilBertModel, DistilBertTokenizer,
@@ -90,11 +90,9 @@ class BERT(nn.Module):
             truncation=True,
         )
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, **kwargs):
         return self.bert_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
+            **kwargs
         )
 
 
@@ -128,12 +126,13 @@ class DISTILBERT(nn.Module):
             truncation=True,
         )
 
-    def forward(self, input_ids, attention_mask):
-        return self.bert_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-        )
+    # def forward(self, input_ids, attention_mask):
+    #     return self.bert_model(
+    #         input_ids=input_ids,
+    #         attention_mask=attention_mask,
+    #         output_hidden_states=True,
+    #         output_attentions=True,
+    #     )
 
 
 class LONGFORMER(nn.Module):
@@ -168,12 +167,13 @@ class LONGFORMER(nn.Module):
             truncation=True,
         )
 
-    def forward(self, input_ids, attention_mask):
-        return self.bert_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-        )
+    # def forward(self, input_ids, attention_mask):
+    #     return self.bert_model(
+    #         input_ids=input_ids,
+    #         attention_mask=attention_mask,
+    #         output_hidden_states=True,
+    #         output_attentions=True,
+    #     )
 
 
 # For type hinting
@@ -201,5 +201,20 @@ def load_embed_model(embed_model_config: EmbedModelConfig) -> EMBED_MODEL_TYPES:
         model_name=model_name,
         embed_model_config=embed_model_config
     )
-
     return embed_model
+
+def load_bert_model_with_attention(embed_model: EMBED_MODEL_TYPES, weights: OrderedDict):
+    if type(embed_model) == BERT:
+        bert_model = BertModel.from_pretrained("bert-base-uncased", attn_implementation="eager")
+        bert_model.load_state_dict(weights)
+        return bert_model
+    elif type(embed_model) == DISTILBERT:
+        distilbert_model = DistilBertModel.from_pretrained("distilbert-base-uncased", attn_implementation="eager")
+        distilbert_model.load_state_dict(weights)
+        return distilbert_model
+    elif type(embed_model) == LONGFORMER:
+        longformer_model = LongformerModel.from_pretrained("allenai/longformer-base-4096", attn_implementation="eager")
+        longformer_model.load_state_dict(weights)
+        return longformer_model
+    else:
+        raise ValueError(f"Unsupported embed_model: {embed_model.name}")

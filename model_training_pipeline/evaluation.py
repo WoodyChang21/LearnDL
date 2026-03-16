@@ -6,13 +6,177 @@ Returns accuracy, precision, recall, and F1-score.
 import io
 import torch
 from torch.utils.data import DataLoader
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import torch.nn as nn
+from model_training_pipeline.embed_model import load_bert_model_with_attention
 
+
+# ===== Attention Visualization Functions =====
+def _filter_special_tokens(tokenizer, tokens, scores):
+    # Filter out special tokens
+    filtered_tokens = []
+    filtered_scores = []
+    for token, score in zip(tokens, scores):
+        if token not in tokenizer.all_special_tokens:
+            filtered_tokens.append(token)
+            filtered_scores.append(score)
+    return filtered_tokens, filtered_scores 
+
+def _merge_wordpiece_tokens(tokens, scores):
+    words = []
+    word_scores = []
+    current_word = ""
+    current_scores = []
+    for token, score in zip(tokens, scores):
+        if token.startswith("##"):
+            current_word += token[2:]
+            current_scores.append(score)
+        else:
+            if current_word != "":
+                words.append(current_word)
+                word_scores.append(sum(current_scores)/len(current_scores))
+            current_word = token
+            current_scores = [score]
+    if current_word != "":
+        words.append(current_word)
+        word_scores.append(sum(current_scores)/len(current_scores))
+    return words, word_scores
+
+def attention_visualization(
+    model: nn.Module,
+    data_loader: DataLoader,
+):
+    print("Building attention visualization...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bert_model_weights = model.bert_model.bert_model.state_dict()
+    bert_model_attention = load_bert_model_with_attention(model.bert_model, bert_model_weights)
+    bert_model_attention.to(device)
+    bert_model_attention.eval()
+    
+    text = data_loader.dataset.dataset.texts[0]
+    
+    # Input IDs and Attention Mask
+    tokenizer = model.bert_model.tokenizer
+    text_tokens = tokenizer(text, truncation=True, padding=False, max_length=model.bert_model.max_length, return_tensors="pt")
+    input_ids = text_tokens["input_ids"].to(device)
+    attention_mask = text_tokens["attention_mask"].to(device)
+    
+    with torch.no_grad():
+        inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "output_attentions": True,
+        }
+        outputs = bert_model_attention(**inputs)
+    
+    attentions = outputs.attentions
+    last_layer_attentions = attentions[-1]
+    average_attentions = last_layer_attentions.mean(dim=1)
+    cls_attention = average_attentions[:, 0, :]
+    tokens = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
+    scores = cls_attention.squeeze(0).tolist()
+    
+
+    filtered_tokens, filtered_scores = _filter_special_tokens(tokenizer, tokens, scores)
+    words, word_scores = _merge_wordpiece_tokens(filtered_tokens, filtered_scores)
+
+    return text, words, word_scores
+# =============================================
+
+# ==== Embedding Visualization Functions ======
+import torch
+import numpy as np
+from sklearn.decomposition import PCA
+
+def build_embedding_2d(model, data_loader, n_samples=50):
+    """
+    Build 2D embedding visualization payload from the first n_samples
+    in a DataLoader whose dataset is a Subset(CustomizeDataset).
+
+    Returns:
+    {
+        "points": [
+            {"x": ..., "y": ..., "label": "...", "text": "..."},
+            ...
+        ],
+        "legend": [...]
+    }
+    """
+    print("Building embedding 2D...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    # test_loader.dataset is a Subset
+    subset = data_loader.dataset
+    base_dataset = subset.dataset
+
+    # first n indices from this subset
+    n_samples = min(n_samples, len(subset))
+    indices = subset.indices[:n_samples]
+
+    # raw texts
+    texts = [base_dataset.texts[i] for i in indices]
+
+    # raw string labels, e.g. "Positive", "Negative"
+    raw_labels = [base_dataset.targets[i] for i in indices]
+
+    # tokenized samples from base dataset
+    samples = [base_dataset[i] for i in indices]
+
+    # dynamic padding using the same collate_fn as your DataLoader
+    batch = data_loader.collate_fn(samples)
+
+    input_ids = batch["input_ids"].to(device)
+    attention_mask = batch["attention_mask"].to(device)
+
+    with torch.no_grad():
+        # expected shape: (batch, seq_len, hidden_size)
+        last_hidden_states = model._embed_input(input_ids, attention_mask)
+
+        # Use CLS embedding for each text
+        # shape: (batch, hidden_size)
+        sentence_embeddings = last_hidden_states[:, 0, :]
+
+    # Move to CPU numpy for PCA
+    sentence_embeddings = sentence_embeddings.detach().cpu().numpy()
+
+    # PCA to 2D
+    pca = PCA(n_components=2)
+    coords_2d = pca.fit_transform(sentence_embeddings)  # shape: (n_samples, 2)
+
+    # Optional: rescale for nicer frontend numbers, e.g. ~0 to 100
+    x_vals = coords_2d[:, 0]
+    y_vals = coords_2d[:, 1]
+
+    def minmax_scale(arr):
+        arr_min = arr.min()
+        arr_max = arr.max()
+        if arr_max - arr_min < 1e-12:
+            return np.full_like(arr, 50.0, dtype=float)
+        return 100.0 * (arr - arr_min) / (arr_max - arr_min)
+
+    x_scaled = minmax_scale(x_vals)
+    y_scaled = minmax_scale(y_vals)
+
+    points = []
+    for x, y, label, text in zip(x_scaled, y_scaled, raw_labels, texts):
+        points.append({
+            "x": round(float(x), 2),
+            "y": round(float(y), 2),
+            "label": label,
+            "text": text[:100],
+        })
+
+    legend = sorted(list(set(raw_labels)))
+
+    return points, legend
+# =============================================
 
 def evaluate(
     model: nn.Module,
     data_loader: DataLoader,
+    class_map: dict,
 ) -> dict[str, float]:
 
 
@@ -35,9 +199,93 @@ def evaluate(
     y_true = all_labels
     y_pred = all_preds
 
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    recall = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    f1score = f1_score(y_true, y_pred, average="macro", zero_division=0)
+
+    # Confusion matrix
+    confusion_matrix_result = confusion_matrix(y_true, y_pred, labels=list(class_map["label_to_id"].values())).tolist()
+    
+    # Attention Visualization
+    text, words, word_scores = attention_visualization(model, data_loader)
+
+    # Embedding Visualization
+    points, legend = build_embedding_2d(model, data_loader)
+
+
     return {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
-        "f1_score": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+
+        "metrics": {
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1score),
+        },
+        "confusion_matrix": {
+            "class_map": list(class_map["label_to_id"].keys()),
+            "confusion_matrix": confusion_matrix_result,
+        },
+        "attention_visualization": {
+            "text": text,
+            "tokens": words,
+            "scores": word_scores,
+        },
+        "embedding_visualization": {
+            "points": points,
+            "legend": legend,
+        }
     }
+
+if __name__ == "__main__":
+    from model_training_pipeline.classify_model import Classifier
+    from model_training_pipeline.embed_model import load_embed_model, load_bert_model_with_attention
+    from model_training_pipeline.model_config import ClassifierConfig, EmbedModelConfig
+    from data_preprocess_pipeline.data_config import DataConfig
+    from model_training_pipeline.train import TrainingConfig
+    from data_preprocess_pipeline.pipeline import preprocess_pipeline
+    from transformers import BertModel
+
+    classifier_config = ClassifierConfig(
+        model_name="test_model",
+        hidden_neurons=64,
+        dropout=0.1,
+        num_classes=None,
+        classifier_type="LINEAR"
+    )
+    embed_model_config = EmbedModelConfig(
+        embed_model="bert_model",
+        fine_tune_mode="unfreeze_all"
+        # unfreeze_last_n_layers=1
+    )
+    data_config = DataConfig(
+        data_path="data/IMDB.csv",
+        # data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/News.csv",
+        lowercase=False,
+        remove_punctuation=False,
+        remove_stopwords=False,
+        lemmatization=False,
+        handle_urls="replace",
+        handle_emails="replace",
+        train_ratio=0.80,
+        test_ratio=0.20,
+        stratify=True,
+    )
+    training_config = TrainingConfig(
+        learning_rate=2e-5,
+        n_epochs=5,
+        batch_size=8,
+        eval_step=2
+    )
+
+    train_loader, val_loader, test_loader, num_classes, class_map = preprocess_pipeline(
+        data_config=data_config, 
+        training_config=training_config, 
+        embed_model_config=embed_model_config)
+    classifier_config.num_classes = num_classes
+    data_config.class_map = class_map
+    bert_model = load_embed_model(embed_model_config)
+    model = Classifier(bert_model, classifier_config)
+    model.eval()
+    result = evaluate(model, test_loader, data_config.class_map)
+    print(result)

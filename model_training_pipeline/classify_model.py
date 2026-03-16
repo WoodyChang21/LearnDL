@@ -43,7 +43,12 @@ class Classifier(nn.Module):
   def _embed_input(self, input_ids, attention_mask):
     input_ids = input_ids.to(DEVICE)
     attention_mask = attention_mask.to(DEVICE)
-    outputs = self.bert_model.forward(input_ids, attention_mask)
+    inputs = {
+      "input_ids": input_ids,
+      "attention_mask": attention_mask,
+      "output_hidden_states": True,
+    }
+    outputs = self.bert_model(**inputs)
     return outputs.last_hidden_state
 
 

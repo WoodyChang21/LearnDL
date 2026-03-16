@@ -45,7 +45,7 @@ def delete_learning_curves(user_id: str, training_session_id: str) -> None:
 # --- Training status (keyed by user_id and training_session_id) ---
 
 class TrainingStatus(BaseModel):
-    status: Literal["queued", "running", "completed", "error", "cancelled"]
+    status: Literal["queued", "running", "completed", "error", "cancelled", "evaluating"]
     config: TotalConfig
     progress: float = 0.0
     result: Optional[dict] = None

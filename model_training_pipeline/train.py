@@ -79,6 +79,7 @@ def run_training(
     training_config = total_config.training_config
     embed_model_config = total_config.embed_model_config
     classifier_config = total_config.classifier_config
+    data_config = total_config.data_config
 
     save_training_status(
         user_id,
@@ -213,7 +214,14 @@ def run_training(
             "val_acc": val_acc_list,
         })
 
-        evaluate_metrics = evaluate(model, test_loader)
+        save_training_status(user_id, training_session_id, TrainingStatus(status="evaluating", config=total_config, progress=1.0, result=None))
+        evaluate_metrics = evaluate(model, test_loader, data_config.class_map)
+        evaluate_metrics["learning_curves"] = {
+            "train_err": train_err,
+            "val_err": val_err,
+            "train_acc": train_acc_list,
+            "val_acc": val_acc_list,
+        }
         completed_status = TrainingStatus(
             status="completed",
             config=total_config,
@@ -233,93 +241,3 @@ def run_training(
         )
         save_training_status(user_id, training_session_id, error_status)
         return error_status
-
-if __name__ == "__main__":
-    
-    from data_preprocess_pipeline.pipeline import preprocess_pipeline
-    from data_preprocess_pipeline.data_config import DataConfig
-
-    # These should be loaded from the frontend
-    training_config = TrainingConfig(
-        learning_rate=2e-5,
-        n_epochs=5,
-        batch_size=8,
-        eval_step=2
-    )
-    classifier_config = ClassifierConfig(
-        model_name="test_model",
-        hidden_neurons=64,
-        dropout=0.1,
-        num_classes=None,
-        classifier_type="LINEAR"
-    )
-    embed_model_config = EmbedModelConfig(
-        embed_model="bert_model",
-        fine_tune_mode="unfreeze_all"
-        # unfreeze_last_n_layers=1
-    )
-    data_config = DataConfig(
-        # data_path="data/News.csv",
-        data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/News.csv",
-        lowercase=False,
-        remove_punctuation=False,
-        remove_stopwords=False,
-        lemmatization=False,
-        handle_urls="replace",
-        handle_emails="replace",
-        train_ratio=0.80,
-        test_ratio=0.20,
-        stratify=True,
-    )
-
-    # Preprocess the data
-    train_loader, val_loader, test_loader, num_classes = preprocess_pipeline(
-        data_config=data_config, 
-        training_config=training_config, 
-        embed_model_config=embed_model_config)
-    classifier_config.num_classes = num_classes
-
-    user_id = "test_user"
-    training_session_id = "test_session"
-
-    # import time
-    # start_time = time.time()
-    # metrics = run_training(
-    #     train_loader = train_loader, 
-    #     val_loader = val_loader, 
-    #     test_loader = test_loader, 
-    #     user_id = user_id, 
-    #     training_session_id = training_session_id, 
-    #     training_config = training_config, 
-    #     classifier_config = classifier_config, 
-    #     embed_model_config = embed_model_config)
-
-    # end_time = time.time()
-    # print(f"Time taken: {end_time - start_time} seconds")
-    # print(metrics)
-
-    # ==== save random model weights ====
-    from cloud_storage.storage_manager import SpaceStorageManager
-    storage_manager = SpaceStorageManager()
-    # embed_model = load_embed_model(embed_model_config)
-    # # New instance per training run (no shared global model).
-    # model = Classifier(embed_model, classifier_config)
-    # best_state_dict = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-    # buffer = io.BytesIO()
-    # torch.save(best_state_dict, buffer)
-    # # save_model_state(user_id, training_session_id, buffer.getvalue())
-    # buffer_value = get_model_state(user_id, training_session_id)
-    # model_url = storage_manager.upload_bytes(buffer_value, user_id, training_session_id, "model.pth")
-    # print(model_url)
-    model_state = storage_manager.read_bytes(user_id, training_session_id, "model.pth")
-    if model_state is None:
-        raise FileNotFoundError(
-            f"No model state found for user_id={user_id!r}, training_session_id={training_session_id!r}. Train first."
-        )
-    state_dict = torch.load(io.BytesIO(model_state), map_location="cpu", weights_only=True)
-    embed_model = load_embed_model(embed_model_config)
-    model = Classifier(embed_model, classifier_config)
-    model.load_state_dict(state_dict)
-    model.eval()
-    for name, param in model.named_parameters():
-        print(name, param.shape)
