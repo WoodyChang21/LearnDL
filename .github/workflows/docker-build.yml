@@ -108,11 +108,10 @@ jobs:
             "gpuCount": 1,
             "containerDiskInGb": 50,
             "volumeInGb": 20,
-            "ports": ["8000/http", "22/tcp"],
+            "ports": ["8000/http"],
             "supportPublicIp": true,
             "env": {
               "ENV": "production",
-              "SSH_PUBLIC_KEY": "${{ secrets.SSH_PUBLIC_KEY }}",
               "DO_REGION": "${{ secrets.DO_REGION }}",
               "DO_ENDPOINT": "${{ secrets.DO_ENDPOINT }}",
               "DO_ACCESS_KEY": "${{ secrets.DO_ACCESS_KEY }}",
