@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Progress from "@radix-ui/react-progress";
 import { Upload } from "lucide-react";
-import { SelectedCard, type SelectedCardOption } from "../components/SelectedCard";
-import { PreprocessingCard } from "../components/PreprocessingCard";
+import Papa from "papaparse";
+
+import mlClient from "../api/mlClient";
 import { ClassfierCard } from "../components/ClassfierCard";
 import { ModelParamsCard } from "../components/ModelParamsCard";
+import { PreprocessingCard } from "../components/PreprocessingCard";
+import { SelectedCard, type SelectedCardOption } from "../components/SelectedCard";
 import { TrainingResult } from "../components/TrainingResult";
-import Papa from "papaparse";
-import mlClient from "../api/mlClient";
 import type { Dataset, TextHandlingMode } from "../type";
 
 type PreviewRow = {
@@ -43,20 +44,23 @@ const DEFAULT_DATASETS: Dataset[] = [
   },
 ];
 
+const getUploadedFile = (dataset: Dataset | null) =>
+  dataset?.type === "uploaded" ? dataset.file ?? null : null;
+
+const getDatasetUrl = (dataset: Dataset | null) =>
+  dataset?.type === "default" ? dataset.url ?? null : null;
+
 export function Training() {
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hasResults] = useState(false);
 
-  // Model Name
   const [modelName, setModelName] = useState("");
-  
-  // Model Dataset
+
   const [datasets, setDatasets] = useState<Dataset[]>(DEFAULT_DATASETS);
   const [selectedDatasetId, setSelectedDatasetId] = useState(DEFAULT_DATASETS[0].id);
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
 
-  // Dataset Preprosessing
   const [lowercase, setLowercase] = useState(true);
   const [removePunctuation, setRemovePunctuation] = useState(true);
   const [removeStopwords, setRemoveStopwords] = useState(false);
@@ -66,7 +70,6 @@ export function Training() {
   const [handleURLs, setHandleURLs] = useState<TextHandlingMode>("keep");
   const [handleEmails, setHandleEmails] = useState<TextHandlingMode>("keep");
 
-  // Model Hyperparams
   const [model, setModel] = useState("distilbert");
   const [epochs, setEpochs] = useState(4);
   const [batchSize, setBatchSize] = useState(32);
@@ -77,7 +80,6 @@ export function Training() {
   const [hiddenNeurons, setHiddenNeurons] = useState(512);
   const [classifierDropout, setClassifierDropout] = useState([30]);
 
-  // Training status
   const [isCanceling, setIsCanceling] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -91,6 +93,11 @@ export function Training() {
     () => datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null,
     [datasets, selectedDatasetId],
   );
+
+  const canStartTraining =
+    !!selectedDataset &&
+    selectedDataset.type !== "upload" &&
+    (selectedDataset.type !== "uploaded" || !!selectedDataset.file);
 
   const formatPreviewText = (text: string) => {
     const compactText = text.replace(/\s+/g, " ").trim();
@@ -152,9 +159,7 @@ export function Training() {
         header: true,
         preview: 5,
         complete: (results) => {
-          resolve(
-            normalizePreviewRows(Array.isArray(results.data) ? results.data : []),
-          );
+          resolve(normalizePreviewRows(Array.isArray(results.data) ? results.data : []));
         },
         error: reject,
       });
@@ -167,7 +172,6 @@ export function Training() {
       }
 
       const response = await fetch(dataset.url);
-      console.log(response);
       if (!response.ok) {
         throw new Error(`Failed to fetch dataset preview (${response.status})`);
       }
@@ -184,12 +188,7 @@ export function Training() {
   };
 
   useEffect(() => {
-    if (!selectedDataset) {
-      setPreviewData([]);
-      return;
-    }
-
-    if (selectedDataset.type === "upload") {
+    if (!selectedDataset || selectedDataset.type === "upload") {
       setPreviewData([]);
       return;
     }
@@ -235,7 +234,7 @@ export function Training() {
 
   const handleFileUpload = (file: File) => {
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      alert("Please upload a CSV file");
+      alert("Please upload a CSV file.");
       return;
     }
 
@@ -276,147 +275,113 @@ export function Training() {
     handleFileUpload(file);
   };
 
+  const uploadDatasetFile = async (file: File) => {
+    const uploadUrl = import.meta.env.VITE_DATASET_UPLOAD_URL;
+
+    if (!uploadUrl) {
+      throw new Error("Missing VITE_DATASET_UPLOAD_URL for CSV upload testing.");
+    }
+
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "text/csv",
+      },
+      body: file,
+    });
+    console.log("Upload response:", response);
+    if (!response.ok) {
+      throw new Error(`Failed to upload CSV (${response.status})`);
+    }
+
+    return uploadUrl.split("?")[0];
+  };
+
   const startTraining = async () => {
     if (!selectedDataset || selectedDataset.type === "upload") {
-      alert("Please select a dataset");
+      alert("Please select a dataset.");
       return;
     }
 
-    const res = await mlClient.post(
-      "/train",
-      {
-        training_config: {
-          learning_rate: 0.001,
-          n_epochs: 1,
-          batch_size: 16,
-          eval_step: 1
-        },
-        data_config: {
-          data_path: "data/IMDB.csv",
-          lowercase: false,
-          remove_punctuation: false,
-          remove_stopwords: false,
-          lemmatization: false,
-          handle_urls: handleURLs,
-          handle_emails: handleEmails,
-          train_ratio: 0.8,
-          test_ratio: 0.2,
-          stratify: true
-        },
-        embed_model_config: {
-          embed_model: "bert_model",
-          fine_tune_mode: "freeze_all"
-        },
-        classifier_config: {
-          model_name: "default",
-          hidden_neurons: hiddenNeurons,
-          dropout: classifierDropout[0] / 100,
-          classifier_type: classifierType
-        }
-      },
-      {
-        params: {
-          user_id: 0,
-          training_session_id: 3,
-        },
-      }
-    );
-
-  console.log(res);
-
-    // if (!dataset) {
-    //   alert("Please select a dataset");
-    //   return;
-    // }
-
-    // if (!modelName.trim()) {
-    //   alert("Please enter a model name");
-    //   return;
-    // }
-
-    // if (!Number.isFinite(epochs) || epochs <= 0) {
-    //   alert("Epochs must be a number bigger than 0");
-    //   return;
-    // }
-
-    // if (!Number.isFinite(batchSize) || batchSize <= 0) {
-    //   alert("Batch size must be a number bigger than 0");
-    //   return;
-    // }
-    
     setIsTraining(true);
     setProgress(0);
 
-    // useEffect(() => {
-    //   if (!sessionId) return
+    try {
+      const uploadedFile = getUploadedFile(selectedDataset);
+      const datasetUrl = getDatasetUrl(selectedDataset);
 
-    //   const interval = setInterval(async () => {
-    //     try {
-    //       const res = await axios.get(`https://steering-stones-viewers-ordered.trycloudflare.com/model_api/get_train_status?user_id=0&training_session_id=0`)
-    //       const data = res.data
+      const trainingDatasetUrl = uploadedFile
+        ? await uploadDatasetFile(uploadedFile)
+        : datasetUrl;
 
-    //       setStatus(data.status)
-    //       setProgress(data.progress)
+      if (!trainingDatasetUrl) {
+        throw new Error("Dataset URL is missing.");
+      }
 
-    //       if (data.status === "completed") {
-    //         setResult(data.result)
-    //         clearInterval(interval)
-    //       }
+      setProgress(10);
 
-    //       if (data.status === "failed") {
-    //         clearInterval(interval)
-    //       }
+      console.log("Dataset ready for training:", trainingDatasetUrl);
 
-    //     } catch (err) {
-    //       console.error(err)
-    //       clearInterval(interval)
-    //     }
-    //   }, 2000) // poll every 2 seconds
+      // Continue with the training API call here after the upload succeeds.
+      // Example: include `trainingDatasetUrl` in the payload sent to your backend.
+      //
+      // await mlClient.post("/train", {
+      //   csv_url: trainingDatasetUrl,
+      //   model_name: modelName,
+      //   ...
+      // });
 
-    //   return () => clearInterval(interval)
-
-    // }, [sessionId])
+      // Reset the temporary uploading state until the real training request is added.
+      setProgress(100);
+      setIsTraining(false);
+    } catch (error) {
+      console.error("Failed to start training", error);
+      alert(error instanceof Error ? error.message : "Failed to start training.");
+      setIsTraining(false);
+      setProgress(0);
+      return;
+    }
   };
 
   const cancelTraining = async () => {
-    // if (status !== "running") return;
     setIsCanceling(true);
-    const res = await mlClient.post(
-      "/cancel_train",
-      null,
-      {
+
+    try {
+      const res = await mlClient.post("/cancel_train", null, {
         params: {
           user_id: 0,
           training_session_id: 3,
         },
-      }
-    );
-    setIsCanceling(false);
-    console.log(res.data);
-    setIsTraining(false);
-  }
+      });
+
+      console.log(res.data);
+      setIsTraining(false);
+    } finally {
+      setIsCanceling(false);
+    }
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      {/* Configuration Section - 40% */}
+    <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl mb-6">Training</h1>
-        
-        {/* Model Name Input */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Model Name</label>
+        <h1 className="mb-6 text-3xl">Training</h1>
+
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <label className="mb-2 block text-sm font-medium text-gray-700">Model Name</label>
           <input
             type="text"
             value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
+            onChange={(event) => setModelName(event.target.value)}
             placeholder="e.g., IMDB-DistilBERT-v1"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-xs text-gray-500 mt-1">Give your model a unique name for easy identification</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Give your model a unique name for easy identification
+          </p>
         </div>
-        
-        <div className="space-y-6 mb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <div className="mb-6 space-y-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <SelectedCard
               title="Dataset"
               selectLabel="Select Dataset"
@@ -435,12 +400,13 @@ export function Training() {
                     onChange={handleFileChange}
                   />
 
-                  {(selectedDataset?.type === "upload" || selectedDataset?.type === "uploaded") && (
+                  {(selectedDataset?.type === "upload" ||
+                    selectedDataset?.type === "uploaded") && (
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-4 hover:border-gray-400 cursor-pointer"
+                      className="mb-4 cursor-pointer rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-gray-400"
                     >
-                      <Upload className="size-8 mx-auto mb-2 text-gray-400" />
+                      <Upload className="mx-auto mb-2 size-8 text-gray-400" />
                       <p className="text-sm text-gray-600">Click to upload or drag and drop</p>
                     </div>
                   )}
@@ -449,7 +415,7 @@ export function Training() {
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <label className="block text-sm text-gray-600">Sample Preview</label>
                     </div>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="overflow-hidden rounded-lg border border-gray-200">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50">
                           <tr>
@@ -458,25 +424,29 @@ export function Training() {
                           </tr>
                         </thead>
                         <tbody>
-                            {previewData && previewData.length > 0 ? (previewData.map((row, i) => (
-                              <tr className="border-t border-gray-200" key={i}>
+                          {previewData.length > 0 ? (
+                            previewData.map((row, index) => (
+                              <tr className="border-t border-gray-200" key={index}>
                                 <td className="px-3 py-2 text-xs" title={row.text}>
                                   {formatPreviewText(row.text)}
                                 </td>
                                 <td className="px-3 py-2 text-xs">{row.label}</td>
                               </tr>
-                            )))
-                          :
-                          (<>
-                          <tr >
-                            <td className="px-3 py-2 text-xs">This is an amazing sample text</td>
-                            <td className="px-3 py-2 text-xs">Positive</td>
-                          </tr>
-                          <tr className="border-t border-gray-200">
-                            <td className="px-3 py-2 text-xs">Worst sample text ever</td>
-                            <td className="px-3 py-2 text-xs">Negative</td>
-                          </tr>
-                          </>)}
+                            ))
+                          ) : (
+                            <>
+                              <tr>
+                                <td className="px-3 py-2 text-xs">
+                                  This is an amazing sample text
+                                </td>
+                                <td className="px-3 py-2 text-xs">Positive</td>
+                              </tr>
+                              <tr className="border-t border-gray-200">
+                                <td className="px-3 py-2 text-xs">Worst sample text ever</td>
+                                <td className="px-3 py-2 text-xs">Negative</td>
+                              </tr>
+                            </>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -505,7 +475,7 @@ export function Training() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ClassfierCard
               classifierType={classifierType}
               hiddenNeurons={hiddenNeurons}
@@ -532,22 +502,25 @@ export function Training() {
           </div>
         </div>
 
-        {/* Training actions */}
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={startTraining}
-              disabled={isTraining}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+              onClick={() => {
+                void startTraining();
+              }}
+              disabled={isTraining || !canStartTraining}
+              className="rounded-lg bg-blue-600 px-8 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {isTraining ? "Training..." : "Start Training"}
             </button>
 
             {isTraining && (
               <button
-                onClick={cancelTraining}
+                onClick={() => {
+                  void cancelTraining();
+                }}
                 disabled={isCanceling}
-                className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                className="rounded-lg bg-red-600 px-8 py-3 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 {isCanceling ? "Canceling..." : "Cancel Training"}
               </button>
@@ -556,14 +529,14 @@ export function Training() {
 
           {isTraining && (
             <div className="w-full max-w-md">
-              <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm">Training Progress</span>
                   <span className="text-sm font-medium">{progress}%</span>
                 </div>
-                <Progress.Root className="relative overflow-hidden bg-gray-200 rounded-full h-2">
+                <Progress.Root className="relative h-2 overflow-hidden rounded-full bg-gray-200">
                   <Progress.Indicator
-                    className="bg-blue-600 h-full transition-transform duration-300 ease-in-out"
+                    className="h-full bg-blue-600 transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(-${100 - progress}%)` }}
                   />
                 </Progress.Root>
