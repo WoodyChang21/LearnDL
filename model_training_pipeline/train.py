@@ -215,6 +215,8 @@ def run_training(
         })
 
         save_training_status(user_id, training_session_id, TrainingStatus(status="evaluating", config=total_config, progress=1.0, result=None))
+        
+        print("Evaluating model...")
         evaluate_metrics = evaluate(model, test_loader, data_config.class_map)
         evaluate_metrics["learning_curves"] = {
             "train_err": train_err,
@@ -241,3 +243,63 @@ def run_training(
         )
         save_training_status(user_id, training_session_id, error_status)
         return error_status
+
+if __name__ == "__main__":
+    from data_preprocess_pipeline.pipeline import preprocess_pipeline
+    from data_preprocess_pipeline.data_config import DataConfig
+    from model_training_pipeline.model_config import TrainingConfig, ClassifierConfig, EmbedModelConfig, TotalConfig
+    user_id = "test"
+    training_session_id = "test"
+    training_config = TrainingConfig(
+        learning_rate=0.001,
+        n_epochs=1,
+        batch_size=16,
+        eval_step=1
+    )
+    data_config = DataConfig(
+        data_path="https://drive.google.com/uc?export=download&id=1XYlSdI4J-gPq7oHHPt2Wobmr-2_CzgzF",
+        lowercase=False,
+        remove_punctuation=False,
+        remove_stopwords=False,
+        lemmatization=False,
+        handle_urls="replace",
+        handle_emails="replace",
+        train_ratio=0.8,
+        test_ratio=0.2,
+        stratify=True,
+        class_map={}
+    )
+    embed_model_config = EmbedModelConfig(
+        embed_model="bert_model",
+        fine_tune_mode="freeze_all"
+    )
+    classifier_config = ClassifierConfig(
+        model_name="default",
+        hidden_neurons=512,
+        dropout=0.3,
+        num_classes=2,
+        classifier_type="GRU"
+    )
+    train_loader, val_loader, test_loader, num_classes, class_map = preprocess_pipeline(
+        data_config=data_config, 
+        training_config=training_config, 
+        embed_model_config=embed_model_config
+    )
+    classifier_config.num_classes = num_classes
+    data_config.class_map = class_map
+    
+    total_config = TotalConfig(
+        embed_model_config=embed_model_config, 
+        classifier_config=classifier_config, 
+        training_config=training_config, 
+        data_config=data_config)
+    
+    result = run_training(
+        train_loader,
+        val_loader,
+        test_loader,
+        user_id,
+        training_session_id,
+        total_config,
+    )
+    print(result)

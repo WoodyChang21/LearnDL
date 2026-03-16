@@ -259,8 +259,8 @@ if __name__ == "__main__":
         # unfreeze_last_n_layers=1
     )
     data_config = DataConfig(
-        data_path="data/IMDB.csv",
-        # data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/News.csv",
+        # data_path="data/IMDB.csv",
+        data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/News.csv",
         lowercase=False,
         remove_punctuation=False,
         remove_stopwords=False,
