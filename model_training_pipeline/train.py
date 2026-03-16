@@ -224,6 +224,7 @@ def run_training(
             "train_acc": train_acc_list,
             "val_acc": val_acc_list,
         }
+        print("COMPLETED TRAINING")
         completed_status = TrainingStatus(
             status="completed",
             config=total_config,
@@ -234,6 +235,7 @@ def run_training(
         return completed_status
 
     except Exception as e:
+        print(f"ERROR: {e}")
         error_status = TrainingStatus(
             status="error",
             config=total_config,
