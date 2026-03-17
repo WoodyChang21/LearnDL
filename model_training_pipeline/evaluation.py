@@ -75,6 +75,7 @@ def _filter_special_tokens(tokenizer, tokens, scores):
     return filtered_tokens, filtered_scores 
 
 def _merge_wordpiece_tokens(tokens, scores):
+    # This works for BERT, DistilBERT
     words = []
     word_scores = []
     current_word = ""
@@ -93,6 +94,52 @@ def _merge_wordpiece_tokens(tokens, scores):
         words.append(current_word)
         word_scores.append(sum(current_scores)/len(current_scores))
     return words, word_scores
+
+def _merge_roberta_tokens(tokenizer, tokens, scores):
+    words = []
+    word_scores = []
+
+    current_tokens = []
+    current_scores = []
+
+    for token, score in zip(tokens, scores):
+        if token == "Ċ":
+            if current_tokens:
+                word = tokenizer.convert_tokens_to_string(current_tokens).strip()
+                if word:
+                    words.append(word)
+                    word_scores.append(sum(current_scores) / len(current_scores))
+                current_tokens = []
+                current_scores = []
+            continue
+
+        if token.startswith("Ġ"):
+            if current_tokens:
+                word = tokenizer.convert_tokens_to_string(current_tokens).strip()
+                if word:
+                    words.append(word)
+                    word_scores.append(sum(current_scores) / len(current_scores))
+            current_tokens = [token]
+            current_scores = [score]
+        else:
+            current_tokens.append(token)
+            current_scores.append(score)
+
+    if current_tokens:
+        word = tokenizer.convert_tokens_to_string(current_tokens).strip()
+        if word:
+            words.append(word)
+            word_scores.append(sum(current_scores) / len(current_scores))
+
+    return words, word_scores
+
+def _merge_tokens(tokenizer, tokens, scores):
+    if any(token.startswith("##") for token in tokens):
+        return _merge_wordpiece_tokens(tokens, scores)
+    elif any(token.startswith("Ġ") or token == "Ċ" for token in tokens):
+        return _merge_roberta_tokens(tokenizer, tokens, scores)
+    else:
+        return tokens, scores
 
 def attention_visualization(
     model: nn.Module,
@@ -128,7 +175,7 @@ def attention_visualization(
     
 
     filtered_tokens, filtered_scores = _filter_special_tokens(tokenizer, tokens, scores)
-    words, word_scores = _merge_wordpiece_tokens(filtered_tokens, filtered_scores)
+    words, word_scores = _merge_tokens(tokenizer, filtered_tokens, filtered_scores)
 
     return text, words, word_scores
 # =============================================
@@ -310,13 +357,13 @@ if __name__ == "__main__":
         classifier_type="LINEAR"
     )
     embed_model_config = EmbedModelConfig(
-        embed_model="bert_model",
+        embed_model="roberta_model",
         fine_tune_mode="unfreeze_all"
         # unfreeze_last_n_layers=1
     )
     data_config = DataConfig(
-        data_path="data/spam.csv",
-        # data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/News.csv",
+        # data_path="data/spam.csv",
+        data_path = "https://deep-learning-project.tor1.cdn.digitaloceanspaces.com/projects/public/spam.csv",
         lowercase=False,
         remove_punctuation=False,
         remove_stopwords=False,
