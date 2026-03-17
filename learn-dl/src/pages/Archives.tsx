@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Calendar } from "lucide-react";
 import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
+import { TrainingVisualizations } from "../components/TrainingVisualizations";
 
 const trainingData = [
   { id: 1, text: "I loved this movie", label: "Positive" },
@@ -20,7 +21,6 @@ export function Archives() {
   const [selectedRun, setSelectedRun] = useState<TrainingRun | null>(
     () => readStoredTrainingRuns()[0] ?? null
   );
-
   const getModelDisplayName = (modelCode: string) => {
     const names: Record<string, string> = {
       distilbert: "DistilBERT",
@@ -208,38 +208,7 @@ export function Archives() {
               </div>
 
               {/* Section 4: Visualizations */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                <h3 className="font-semibold mb-6">Training Results</h3>
-                
-                <div className="space-y-8">
-                  {/* <div>
-                    <h4 className="font-medium mb-4">Metrics</h4>
-                    <MetricsView />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium mb-4">Confusion Matrix</h4>
-                      <ConfusionMatrix />
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium mb-4">Learning Curve</h4>
-                      <LearningCurve />
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-4">Attention Weights</h4>
-                    <AttentionView />
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-4">Embedding Plot</h4>
-                    <EmbeddingView />
-                  </div> */}
-                </div>
-              </div>
+              <TrainingVisualizations data={selectedRun.visualizationData} />
 
               {/* Section 5: Download */}
               <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">

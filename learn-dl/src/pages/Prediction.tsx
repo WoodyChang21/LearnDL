@@ -3,6 +3,10 @@ import * as Select from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
 import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
 import mlClient from "../api/mlClient";
+import {
+  AttentionPanel,
+  type AttentionVisualizationData,
+} from "../components/TrainingVisualizations";
 
 export function Prediction() {
   const [trainedModels] = useState<TrainingRun[]>(readStoredTrainingRuns);
@@ -15,13 +19,13 @@ export function Prediction() {
     confidence: number;
     probabilities: { label: string; value: number }[];
   } | null>(null);
+  const [attentionData, setAttentionData] = useState<AttentionVisualizationData | null>(null);
 
   const handlePredict = async () => {
     // Mock prediction
     // const isPositive = inputText.toLowerCase().includes("love") || 
     //                    inputText.toLowerCase().includes("great") || 
     //                    inputText.toLowerCase().includes("recommend");
-    
     // setPrediction({
     //   label: isPositive ? "Positive" : "Negative",
     //   confidence: isPositive ? 0.94 : 0.88,
@@ -63,6 +67,23 @@ export function Prediction() {
       }
     );
     console.log(res);
+
+    const tokens = inputText
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+    const scores = tokens.map((token, index) => {
+      const hasSentimentWord = /(love|great|recommend|bad|worst|terrible|hate)/i.test(token);
+      if (hasSentimentWord) {
+        return 0.9;
+      }
+      return Math.max(0.15, 0.45 - index * 0.01);
+    });
+    setAttentionData({
+      text: inputText,
+      tokens,
+      scores,
+    });
   };
 
   return (
@@ -163,10 +184,7 @@ export function Prediction() {
           </div>
 
           {/* Attention Highlight */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-semibold mb-4">Attention Highlight</h3>
-            {/* <AttentionView /> */}
-          </div>
+          {attentionData && <AttentionPanel attention={attentionData} />}
         </div>
       )}
     </div>

@@ -3,6 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as Progress from "@radix-ui/react-progress";
 import { Upload } from "lucide-react";
 import Papa from "papaparse";
+import {
+  FALLBACK_TRAINING_VISUALIZATION_DATA,
+  type TrainingVisualizationData,
+} from "../components/TrainingVisualizations";
 
 import api from "../api/axiosClient";
 import mlClient from "../api/mlClient";
@@ -166,7 +170,6 @@ const getDatasetUrl = (dataset: Dataset | null) =>
 export function Training() {
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [hasResults] = useState(false);
   const [trainingStatus, setTrainingStatus] = useState<string | null>(null);
   const [trainingError, setTrainingError] = useState<string | null>(null);
 
@@ -198,6 +201,10 @@ export function Training() {
   const [isCanceling, setIsCanceling] = useState(false);
 
   const [trainingSessionID, setTrainingSessionID] = useState<string | null>(null);
+
+  
+  const [hasResults, setHasResults] = useState(false);
+  const [visualizationData, setVisualizationData] = useState<TrainingVisualizationData | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const trainingUserIdRef = useRef<string | null>(null);
@@ -412,6 +419,8 @@ export function Training() {
         if (normalizedStatus && TERMINAL_TRAINING_STATUSES.has(normalizedStatus)) {
           if (normalizedStatus === "completed") {
             setProgress(100);
+            setHasResults(true);
+            setVisualizationData(response.data.result);
           }
           setIsTraining(false);
           trainingUserIdRef.current = null;
@@ -584,6 +593,7 @@ export function Training() {
     };
   };
 
+
   const startTraining = async () => {
     const user = await api.get("/auth/me").then((res) => res.data.user).catch(() => null);
 
@@ -708,6 +718,7 @@ export function Training() {
           user_id: trainingUserIdRef.current,
           training_session_id: trainingSessionID,
         },
+
       });
 
       const { status: nextStatus, progress: nextProgress } =
@@ -933,7 +944,7 @@ export function Training() {
         </div>
       </div>
 
-      <TrainingResult hasResults={hasResults} />
+      <TrainingResult hasResults={hasResults} visualizationData={visualizationData} />
     </div>
   );
 }
