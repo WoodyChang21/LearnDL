@@ -14,10 +14,13 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    
-    await signupUser(username, email, password)
-    onSuccess?.()
-    alert("Account created! Please login.")
+    try {
+      await signupUser(username, email, password)
+      onSuccess?.()
+      alert("Account created! Please login.")
+    } catch {
+      alert("Signup failed")
+    }
   }
 
   return (

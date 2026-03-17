@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react"
 import { onAuthStateChanged } from "firebase/auth"
 import { AuthContext } from "./authContext"
-import { getCurrentUser, logoutUser, type AuthUser } from "./authService"
+import {
+  getCurrentUser,
+  isSignupInProgress,
+  logoutUser,
+  type AuthUser,
+} from "./authService"
 import { auth } from "./firebase"
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -25,9 +30,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       try {
+        if (isSignupInProgress()) {
+          if (!isMounted) {
+            return
+          }
+
+          setUser(null)
+          setIsAuthenticated(false)
+          return
+        }
+
         const currentUser = await getCurrentUser()
 
         if (!isMounted) {
+          return
+        }
+
+        if (!currentUser) {
+          setUser(null)
+          setIsAuthenticated(false)
           return
         }
 

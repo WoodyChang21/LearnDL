@@ -1,8 +1,10 @@
+import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Progress from "@radix-ui/react-progress";
 import { Upload } from "lucide-react";
 import Papa from "papaparse";
 
+import api from "../api/axiosClient";
 import mlClient from "../api/mlClient";
 import { ClassfierCard } from "../components/ClassfierCard";
 import { ModelParamsCard } from "../components/ModelParamsCard";
@@ -16,7 +18,118 @@ type PreviewRow = {
   label: string;
 };
 
+type UploadedDatasetResult = {
+  getUrl: string | null;
+  trainingSessionId: string | null;
+};
+
 const PREVIEW_TEXT_LIMIT = 200;
+const TRAIN_STATUS_POLL_INTERVAL_MS = 2000;
+const DEFAULT_DATASET_TRAINING_SESSION_ID = "test";
+const EVALUATING_TRAINING_STATUSES = new Set(["evaluting", "evaluating"]);
+const KNOWN_TRAINING_STATUSES = new Set([
+  "queued",
+  "running",
+  "completed",
+  "error",
+  "cancelled",
+  "evaluting",
+  "evaluating",
+]);
+
+const TERMINAL_TRAINING_STATUSES = new Set([
+  "completed",
+  "error",
+  "cancelled",
+]);
+
+const toNullableString = (value: unknown): string | null =>
+  value === null || value === undefined ? null : String(value);
+
+const parseTrainingStatusUpdate = (payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { status: null, progress: null };
+  }
+
+  const { status, progress } = payload as {
+    status?: unknown;
+    progress?: unknown;
+  };
+
+  const normalizedStatus = typeof status === "string" ? status : null;
+
+  if (typeof progress !== "number" && typeof progress !== "string") {
+    return { status: normalizedStatus, progress: null };
+  }
+
+  const parsedProgress = Number(progress);
+
+  if (!Number.isFinite(parsedProgress)) {
+    return { status: normalizedStatus, progress: null };
+  }
+
+  const normalizedProgress =
+    parsedProgress >= 0 && parsedProgress <= 1 ? parsedProgress * 100 : parsedProgress;
+
+  return {
+    status: normalizedStatus,
+    progress: Math.min(100, Math.max(0, Math.round(normalizedProgress))),
+  };
+};
+
+const parseTrainingError = (payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const rawError = (payload as { error?: unknown }).error;
+
+  if (typeof rawError === "string" && rawError.trim() !== "") {
+    return rawError;
+  }
+
+  if (!rawError || typeof rawError !== "object" || Array.isArray(rawError)) {
+    return null;
+  }
+
+  const errorRecord = rawError as Record<string, unknown>;
+  const errorMessage = errorRecord.message ?? errorRecord.detail ?? errorRecord.error;
+
+  if (typeof errorMessage === "string" && errorMessage.trim() !== "") {
+    return errorMessage;
+  }
+
+  return JSON.stringify(rawError);
+};
+
+const isEvaluatingStatus = (status: string | null) =>
+  !!status && EVALUATING_TRAINING_STATUSES.has(status);
+
+const formatTrainingStatus = (status: string | null) => {
+  if (!status) {
+    return "Starting";
+  }
+
+  if (isEvaluatingStatus(status)) {
+    return "Evaluating";
+  }
+
+  return status
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
+const normalizeTrainingStatus = (status: string | null) => {
+  if (!status) {
+    return null;
+  }
+
+  if (isEvaluatingStatus(status)) {
+    return "evaluating";
+  }
+
+  return KNOWN_TRAINING_STATUSES.has(status) ? status : null;
+};
 
 const DEFAULT_DATASETS: Dataset[] = [
   {
@@ -54,6 +167,8 @@ export function Training() {
   const [isTraining, setIsTraining] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hasResults] = useState(false);
+  const [trainingStatus, setTrainingStatus] = useState<string | null>(null);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
 
   const [modelName, setModelName] = useState("");
 
@@ -75,14 +190,17 @@ export function Training() {
   const [batchSize, setBatchSize] = useState(32);
   const [learningRate, setLearningRate] = useState("2e-5");
   const [evaluationFrequency, setEvaluationFrequency] = useState("1");
-  const [fineTune, setFineTune] = useState(true);
+  const [fineTune, setFineTune] = useState("freeze_all");
   const [classifierType, setClassifierType] = useState("GRU");
   const [hiddenNeurons, setHiddenNeurons] = useState(512);
   const [classifierDropout, setClassifierDropout] = useState([30]);
 
   const [isCanceling, setIsCanceling] = useState(false);
 
+  const [trainingSessionID, setTrainingSessionID] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const trainingUserIdRef = useRef<string | null>(null);
 
   const datasetOptions = useMemo<SelectedCardOption[]>(
     () => datasets.map((dataset) => ({ value: dataset.id, label: dataset.label })),
@@ -93,6 +211,9 @@ export function Training() {
     () => datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null,
     [datasets, selectedDatasetId],
   );
+
+  const shouldShowTrainingStatusCard =
+    isTraining || trainingStatus === "error" || Boolean(trainingError);
 
   const canStartTraining =
     !!selectedDataset &&
@@ -165,6 +286,30 @@ export function Training() {
       });
     });
 
+  const parseRawPreviewRows = (file: File) =>
+    new Promise<Record<string, unknown>[]>((resolve, reject) => {
+      Papa.parse<Record<string, unknown>>(file, {
+        header: true,
+        preview: 5,
+        complete: (results) => {
+          const rows = Array.isArray(results.data)
+            ? results.data.filter((row) => {
+                if (!row || typeof row !== "object" || Array.isArray(row)) {
+                  return false;
+                }
+
+                return Object.values(row).some((value) =>
+                  String(value ?? "").trim() !== "",
+                );
+              })
+            : [];
+
+          resolve(rows);
+        },
+        error: reject,
+      });
+    });
+
   const loadPreview = async (dataset: Dataset): Promise<PreviewRow[]> => {
     if (dataset.type === "default") {
       if (!dataset.url) {
@@ -215,6 +360,87 @@ export function Training() {
       isActive = false;
     };
   }, [selectedDataset]);
+
+  useEffect(() => {
+    if (!isTraining || !trainingUserIdRef.current || !trainingSessionID) {
+      console.log("Not starting training status polling - missing required information", {
+        isTraining,
+        trainingUserId: trainingUserIdRef.current,
+        trainingSessionID,
+      });
+      return;
+    }
+
+    let isActive = true;
+    let timeoutId: number | undefined;
+
+    const pollTrainingStatus = async () => {
+      try {
+        const response = await mlClient.get("/get_train_status", {
+          params: {
+            user_id: trainingUserIdRef.current,
+            training_session_id: trainingSessionID,
+          },
+        });
+        console.log("Polled training status update", { responseData: response.data });
+        if (!isActive) {
+          return;
+        }
+
+        const { status: nextStatus, progress: nextProgress } =
+          parseTrainingStatusUpdate(response.data);
+        const nextError = parseTrainingError(response.data);
+
+        const normalizedStatus = normalizeTrainingStatus(nextStatus);
+
+        if (normalizedStatus) {
+          setTrainingStatus(normalizedStatus);
+        }
+
+        if (normalizedStatus === "evaluating" || normalizedStatus === "completed") {
+          setProgress(100);
+        } else if (nextProgress !== null) {
+          setProgress(nextProgress);
+        }
+
+        if (nextError) {
+          setTrainingError(nextError);
+        } else if (normalizedStatus !== "error") {
+          setTrainingError(null);
+        }
+
+        if (normalizedStatus && TERMINAL_TRAINING_STATUSES.has(normalizedStatus)) {
+          if (normalizedStatus === "completed") {
+            setProgress(100);
+          }
+          setIsTraining(false);
+          trainingUserIdRef.current = null;
+          return;
+        }
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        console.error("Failed to fetch training status", error);
+      }
+
+      if (isActive) {
+        timeoutId = window.setTimeout(() => {
+          void pollTrainingStatus();
+        }, TRAIN_STATUS_POLL_INTERVAL_MS);
+      }
+    };
+
+    void pollTrainingStatus();
+
+    return () => {
+      isActive = false;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [isTraining, trainingSessionID]);
 
   const handleDatasetSelection = (datasetId: string) => {
     const dataset = datasets.find((item) => item.id === datasetId);
@@ -275,13 +501,34 @@ export function Training() {
     handleFileUpload(file);
   };
 
-  const uploadDatasetFile = async (file: File) => {
-    const uploadUrl = import.meta.env.VITE_DATASET_UPLOAD_URL;
+  const uploadDatasetFile = async (
+    file: File,
+    userId: string | null,
+  ): Promise<UploadedDatasetResult> => {
+    if (!userId) {
+      throw new Error("You must be logged in to upload a dataset.");
+    }
+
+    const previewData = await parseRawPreviewRows(file);
+
+    const presignedUrlResponse = await api.post(
+      `/users/${userId}/datasets/upload`,
+      {
+        fileName: file.name,
+        modelName: modelName.trim(),
+        previewData,
+      },
+    );
+
+    const uploadUrl = toNullableString(presignedUrlResponse.data?.url);
+    const getUrl = toNullableString(presignedUrlResponse.data?.getUrl);
+    const trainingSessionId = toNullableString(presignedUrlResponse.data?.sessionId);
 
     if (!uploadUrl) {
       throw new Error("Missing VITE_DATASET_UPLOAD_URL for CSV upload testing.");
     }
 
+    // Upload the file to the pre-signed URL
     const response = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
@@ -289,15 +536,59 @@ export function Training() {
       },
       body: file,
     });
+
     console.log("Upload response:", response);
+
     if (!response.ok) {
       throw new Error(`Failed to upload CSV (${response.status})`);
     }
 
-    return uploadUrl.split("?")[0];
+    return {
+      getUrl,
+      trainingSessionId,
+    };
+  };
+
+  const buildTrainingPayload = (trainingDatasetUrl: string) => {
+    return {
+      training_config: {
+        learning_rate: 0.001,
+        n_epochs: 1,
+        batch_size: 16,
+        eval_step: 1
+      },
+      data_config: {
+        data_path: trainingDatasetUrl,
+        lowercase: false,
+        remove_punctuation: false,
+        remove_stopwords: false,
+        lemmatization: false,
+        handle_urls: "replace",
+        handle_emails: "replace",
+        train_ratio: 0.8,
+        test_ratio: 0.2,
+        stratify: true,
+        class_map: {}
+      },
+      embed_model_config: {
+        embed_model: "bert_model",
+        fine_tune_mode: "freeze_all"
+      },
+      classifier_config: {
+        model_name: "default",
+        hidden_neurons: 512,
+        dropout: 0.3,
+        num_classes: 2,
+        classifier_type: "GRU"
+      }
+    };
   };
 
   const startTraining = async () => {
+    const user = await api.get("/auth/me").then((res) => res.data.user).catch(() => null);
+
+    console.log("Current user:", user);
+
     if (!selectedDataset || selectedDataset.type === "upload") {
       alert("Please select a dataset.");
       return;
@@ -305,40 +596,97 @@ export function Training() {
 
     setIsTraining(true);
     setProgress(0);
+    setTrainingStatus("running");
+    setTrainingError(null);
+    setTrainingSessionID(null);
+    trainingUserIdRef.current = null;
 
     try {
       const uploadedFile = getUploadedFile(selectedDataset);
       const datasetUrl = getDatasetUrl(selectedDataset);
+      let trainingDatasetUrl = datasetUrl;
+      let currentTrainingSessionId = DEFAULT_DATASET_TRAINING_SESSION_ID;
 
-      const trainingDatasetUrl = uploadedFile
-        ? await uploadDatasetFile(uploadedFile)
-        : datasetUrl;
+      if (!user?.userId) {
+        throw new Error("You must be logged in to start training.");
+      }
+
+      if (uploadedFile) {
+        const uploadResult = await uploadDatasetFile(uploadedFile, user.userId);
+        trainingDatasetUrl = uploadResult.getUrl;
+        currentTrainingSessionId = uploadResult.trainingSessionId ?? "";
+      }
 
       if (!trainingDatasetUrl) {
         throw new Error("Dataset URL is missing.");
       }
 
-      setProgress(10);
+      if (!currentTrainingSessionId) {
+        throw new Error("Training session ID is missing.");
+      }
+
+      setProgress(0);
 
       console.log("Dataset ready for training:", trainingDatasetUrl);
 
       // Continue with the training API call here after the upload succeeds.
       // Example: include `trainingDatasetUrl` in the payload sent to your backend.
       //
-      // await mlClient.post("/train", {
-      //   csv_url: trainingDatasetUrl,
-      //   model_name: modelName,
-      //   ...
-      // });
+      const params: Record<string, string> = {
+        user_id: String(user.userId),
+        training_session_id: currentTrainingSessionId,
+      };
 
-      // Reset the temporary uploading state until the real training request is added.
-      setProgress(100);
-      setIsTraining(false);
+      console.log("Starting training with params:", params);
+
+      const payload = buildTrainingPayload(trainingDatasetUrl);
+
+      const response = await mlClient.post(
+        "/train",
+        payload,
+        { params: params },
+      );
+      trainingUserIdRef.current = String(user.userId);
+      setTrainingSessionID(currentTrainingSessionId);
+
+      const { status: parsedStatus, progress: nextProgress } =
+        parseTrainingStatusUpdate(response.data);
+      const nextError = parseTrainingError(response.data);
+      const nextStatus = normalizeTrainingStatus(parsedStatus) ?? "queued";
+
+      setTrainingStatus(nextStatus);
+
+      if (nextStatus === "evaluating" || nextStatus === "completed") {
+        setProgress(100);
+      } else if (nextProgress !== null) {
+        setProgress(nextProgress);
+      }
+
+      if (nextError) {
+        setTrainingError(nextError);
+      }
+
+      if (TERMINAL_TRAINING_STATUSES.has(nextStatus)) {
+        setIsTraining(false);
+        trainingUserIdRef.current = null;
+      }
+
     } catch (error) {
       console.error("Failed to start training", error);
-      alert(error instanceof Error ? error.message : "Failed to start training.");
+      const errorMessage = axios.isAxiosError(error)
+        ? (error.response?.data?.detail ??
+          error.response?.data?.error ??
+          error.message)
+        : error instanceof Error
+          ? error.message
+          : "Failed to start training.";
+      alert(errorMessage);
       setIsTraining(false);
       setProgress(0);
+      setTrainingStatus("error");
+      setTrainingError(errorMessage);
+      setTrainingSessionID(null);
+      trainingUserIdRef.current = null;
       return;
     }
   };
@@ -347,15 +695,44 @@ export function Training() {
     setIsCanceling(true);
 
     try {
+      if (!trainingUserIdRef.current) {
+        throw new Error("You must be logged in to cancel training.");
+      }
+
+      if (!trainingSessionID) {
+        throw new Error("Missing training session ID for cancel request.");
+      }
+
       const res = await mlClient.post("/cancel_train", null, {
         params: {
-          user_id: 0,
-          training_session_id: 3,
+          user_id: trainingUserIdRef.current,
+          training_session_id: trainingSessionID,
         },
       });
 
-      console.log(res.data);
-      setIsTraining(false);
+      const { status: nextStatus, progress: nextProgress } =
+        parseTrainingStatusUpdate(res.data);
+      const nextError = parseTrainingError(res.data);
+      const normalizedStatus = normalizeTrainingStatus(nextStatus);
+
+      setTrainingStatus(normalizedStatus);
+
+      if (normalizedStatus === "evaluating" || normalizedStatus === "completed") {
+        setProgress(100);
+      } else if (nextProgress !== null) {
+        setProgress(nextProgress);
+      }
+
+      if (nextError) {
+        setTrainingError(nextError);
+      } else if (normalizedStatus !== "error") {
+        setTrainingError(null);
+      }
+
+      if (normalizedStatus && TERMINAL_TRAINING_STATUSES.has(normalizedStatus)) {
+        setIsTraining(false);
+        trainingUserIdRef.current = null;
+      }
     } finally {
       setIsCanceling(false);
     }
@@ -400,8 +777,7 @@ export function Training() {
                     onChange={handleFileChange}
                   />
 
-                  {(selectedDataset?.type === "upload" ||
-                    selectedDataset?.type === "uploaded") && (
+                  {(selectedDataset?.type === "upload") && (
                     <div
                       onClick={() => fileInputRef.current?.click()}
                       className="mb-4 cursor-pointer rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-gray-400"
@@ -497,7 +873,7 @@ export function Training() {
               onBatchSizeChange={setBatchSize}
               onLearningRateChange={setLearningRate}
               onEvaluationFrequencyChange={setEvaluationFrequency}
-              onFineTuneSwitchChange={setFineTune}
+              onFineTuneModeChange={setFineTune}
             />
           </div>
         </div>
@@ -527,12 +903,18 @@ export function Training() {
             )}
           </div>
 
-          {isTraining && (
+          {shouldShowTrainingStatusCard && (
             <div className="w-full max-w-md">
               <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm">Training Progress</span>
                   <span className="text-sm font-medium">{progress}%</span>
+                </div>
+                <div className="mb-3 flex items-center justify-between text-xs text-gray-500">
+                  <span>Status</span>
+                  <span className="font-medium text-gray-700">
+                    {formatTrainingStatus(trainingStatus)}
+                  </span>
                 </div>
                 <Progress.Root className="relative h-2 overflow-hidden rounded-full bg-gray-200">
                   <Progress.Indicator
@@ -540,6 +922,11 @@ export function Training() {
                     style={{ transform: `translateX(-${100 - progress}%)` }}
                   />
                 </Progress.Root>
+                {trainingError && (
+                  <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {trainingError}
+                  </p>
+                )}
               </div>
             </div>
           )}

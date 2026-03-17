@@ -8,6 +8,8 @@ const CLASSIFIER_OPTIONS: Array<{
     { label: "Linear", value: "LINEAR" },
 ];
 
+const HIDDEN_NEURONS_OPTIONS = [64, 128, 256, 512].map((value) => ({ label: value.toString(), value }));
+
 type ClassifierCardProps = {
     classifierType: string;
     hiddenNeurons: number;
@@ -44,14 +46,20 @@ export function ClassfierCard({
                     </select>
                 </div>
 
-                <div>
-                    <label className="block text-sm text-gray-600 mb-1">Hidden Neurons</label>
-                    <input
-                        type="number"
+
+                <div className="flex items-center justify-between">
+                    <label className="text-sm">Hidden Neurons</label>
+                    <select
                         value={hiddenNeurons}
                         onChange={(event) => onHiddenNeuronsChange(Number(event.target.value))}
-                        className={"w-full px-3 py-2 border rounded-lg text-sm border-gray-300"}
-                    />
+                        className="min-w-28 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        {HIDDEN_NEURONS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                        ))}
+                    </select>
                 </div>
                     
                 <div>

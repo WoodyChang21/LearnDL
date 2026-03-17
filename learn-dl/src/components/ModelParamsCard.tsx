@@ -1,19 +1,27 @@
 import * as RadioGroup from "@radix-ui/react-radio-group";
-import * as Switch from "@radix-ui/react-switch";
+
+const FINE_TUNE_MODE_OPTIONS: Array<{
+  label: string;
+  value: string;
+}> = [
+  { label: "Freeze All", value: "freeze_all" },
+  { label: "Unfreeze Last N Layers", value: "unfreeze_last_n_layers" },
+  { label: "Unfreeze All", value: "unfreeze_all" },
+];
 
 type ModelParamsCardProps = {
   model: string;
   epochs: number;
   batchSize: number;
   learningRate: string;
-  fineTune: boolean;
   evaluationFrequency: string;
+  fineTune: string;
   onModelChange: (value: string) => void;
   onEpochsChange: (value: number) => void;
   onBatchSizeChange: (value: number) => void;
   onLearningRateChange: (value: string) => void;
-  onFineTuneSwitchChange: (value: boolean) => void;
   onEvaluationFrequencyChange: (value: string) => void;
+  onFineTuneModeChange: (value: string) => void;
 };
 
 export function ModelParamsCard({
@@ -28,7 +36,7 @@ export function ModelParamsCard({
   onBatchSizeChange,
   onLearningRateChange,
   onEvaluationFrequencyChange,
-  onFineTuneSwitchChange,
+  onFineTuneModeChange,
 }: ModelParamsCardProps) {
   const isEpochsValid = Number.isFinite(epochs) && epochs > 0;
   const isBatchSizeValid = Number.isFinite(batchSize) && batchSize > 0;
@@ -133,16 +141,19 @@ export function ModelParamsCard({
           />
         </div>
 
-
         <div className="flex items-center justify-between">
-          <label className="text-sm">Fine-tune embeddings</label>
-          <Switch.Root
-            checked={fineTune}
-            onCheckedChange={onFineTuneSwitchChange}
-            className="w-11 h-6 bg-gray-200 rounded-full data-[state=checked]:bg-blue-600 relative transition-colors"
+          <label className="text-sm">Fine Tune Mode</label>
+          <select
+            value={fineTune}
+            onChange={(event) => onFineTuneModeChange(event.target.value)}
+            className="min-w-28 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <Switch.Thumb className="block size-5 bg-white rounded-full shadow-sm transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
-          </Switch.Root>
+            {FINE_TUNE_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </div>
