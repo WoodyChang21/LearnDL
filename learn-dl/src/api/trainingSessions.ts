@@ -120,9 +120,8 @@ const mapTrainingSession = (session: BackendTrainingSession): TrainingRun => {
 
 export const getUserTrainingSessions = async (): Promise<TrainingRun[]> => {
   const userId = await getCurrentUserId();
-  const response = await api.get<{ data: BackendTrainingSession[] } | BackendTrainingSession[]>(
+  const response = await api.get<{ trainingSessions: BackendTrainingSession[] }>(
     `/users/${userId}/training_sessions`,
   );
-  const sessions = Array.isArray(response.data) ? response.data : null;
-  return sessions ? sessions.map(mapTrainingSession) : [];
+  return response.data.trainingSessions.map(mapTrainingSession);
 };
