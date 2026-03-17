@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Calendar } from "lucide-react";
-import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
+import { getUserTrainingSessions, type TrainingRun } from "../api/trainingSessions";
 import { TrainingVisualizations } from "../components/TrainingVisualizations";
 
 const trainingData = [
@@ -17,10 +17,47 @@ const trainingData = [
 ];
 
 export function Archives() {
-  const [trainingRuns] = useState<TrainingRun[]>(readStoredTrainingRuns);
-  const [selectedRun, setSelectedRun] = useState<TrainingRun | null>(
-    () => readStoredTrainingRuns()[0] ?? null
-  );
+  const [trainingRuns, setTrainingRuns] = useState<TrainingRun[]>([]);
+  const [selectedRun, setSelectedRun] = useState<TrainingRun | null>(null);
+  const [isLoadingRuns, setIsLoadingRuns] = useState(true);
+  const [runsError, setRunsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadTrainingRuns = async () => {
+      setIsLoadingRuns(true);
+      setRunsError(null);
+
+      try {
+        const sessions = await getUserTrainingSessions();
+
+        if (!isActive) {
+          return;
+        }
+
+        setTrainingRuns(sessions);
+        setSelectedRun(sessions[0] || null);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRunsError(error instanceof Error ? error.message : "Failed to load training history.");
+      } finally {
+        if (isActive) {
+          setIsLoadingRuns(false);
+        }
+      }
+    };
+
+    void loadTrainingRuns();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const getModelDisplayName = (modelCode: string) => {
     const names: Record<string, string> = {
       distilbert: "DistilBERT",
@@ -40,12 +77,25 @@ export function Archives() {
     return names[datasetCode] || datasetCode;
   };
 
+  if (isLoadingRuns) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-2">Loading Training History</h2>
+          <p className="text-gray-600">Fetching your training sessions.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (trainingRuns.length === 0) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">No Training History</h2>
-          <p className="text-gray-600">Train a model to see it appear here.</p>
+          <p className="text-gray-600">
+            {runsError || "Train a model to see it appear here."}
+          </p>
         </div>
       </div>
     );

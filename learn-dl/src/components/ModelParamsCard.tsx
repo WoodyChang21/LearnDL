@@ -14,13 +14,13 @@ type ModelParamsCardProps = {
   epochs: number;
   batchSize: number;
   learningRate: string;
-  evaluationFrequency: string;
+  evaluationFrequency: number;
   fineTune: string;
   onModelChange: (value: string) => void;
   onEpochsChange: (value: number) => void;
   onBatchSizeChange: (value: number) => void;
   onLearningRateChange: (value: string) => void;
-  onEvaluationFrequencyChange: (value: string) => void;
+  onEvaluationFrequencyChange: (value: number) => void;
   onFineTuneModeChange: (value: string) => void;
 };
 
@@ -50,40 +50,40 @@ export function ModelParamsCard({
         <RadioGroup.Root value={model} onValueChange={onModelChange} className="space-y-2">
           <div className="flex items-center">
             <RadioGroup.Item
-              value="bilstm"
-              id="bilstm"
+              value="bert_model"
+              id="bert_model"
               className="size-4 rounded-full border border-gray-300 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
             >
               <RadioGroup.Indicator className="flex items-center justify-center w-full h-full relative after:content-[''] after:block after:size-1.5 after:rounded-full after:bg-white" />
             </RadioGroup.Item>
-            <label htmlFor="bilstm" className="ml-2 text-sm">
+            <label htmlFor="bert_model" className="ml-2 text-sm">
               Bert Model
             </label>
           </div>
           <div className="flex items-center">
             <RadioGroup.Item
-              value="distilbert"
-              id="distilbert"
+              value="distilbert_model"
+              id="distilbert_model"
               className="size-4 rounded-full border border-gray-300 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
             >
               <RadioGroup.Indicator className="flex items-center justify-center w-full h-full relative after:content-[''] after:block after:size-1.5 after:rounded-full after:bg-white" />
             </RadioGroup.Item>
-            <label htmlFor="distilbert" className="ml-2 text-sm">
+            <label htmlFor="distilbert_model" className="ml-2 text-sm">
               DistilBERT Model
             </label>
           </div>
-          {/* <div className="flex items-center">
+          <div className="flex items-center">
             <RadioGroup.Item
-              value="roberta"
-              id="roberta"
+              value="roberta_model"
+              id="roberta_model"
               className="size-4 rounded-full border border-gray-300 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
             >
               <RadioGroup.Indicator className="flex items-center justify-center w-full h-full relative after:content-[''] after:block after:size-1.5 after:rounded-full after:bg-white" />
             </RadioGroup.Item>
-            <label htmlFor="roberta" className="ml-2 text-sm">
+            <label htmlFor="roberta_model" className="ml-2 text-sm">
               RoBERTa
             </label>
-          </div> */}
+          </div>
         </RadioGroup.Root>
       </div>
 
@@ -136,7 +136,7 @@ export function ModelParamsCard({
             type="text"
             min={1}
             value={evaluationFrequency}
-            onChange={(event) => onEvaluationFrequencyChange(event.target.value)}
+            onChange={(event) => onEvaluationFrequencyChange(Number(event.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </div>

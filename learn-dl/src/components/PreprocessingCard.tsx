@@ -16,7 +16,7 @@ type PreprocessingCardProps = {
     removePunctuation: boolean;
     removeStopwords: boolean;
     lemmatization: boolean;
-    trainSplit: number[];
+    trainSplit: number;
     stratifiedSplit: boolean;
     handleURLs: TextHandlingMode;
     handleEmails: TextHandlingMode;
@@ -24,7 +24,7 @@ type PreprocessingCardProps = {
     onPunctuationSwitchChange: (value: boolean) => void;
     onStopwordsSwitchChange: (value: boolean) => void;
     onLemmatizationSwitchChange: (value: boolean) => void;
-    onTrainSplitChange: (value: number[]) => void;
+    onTrainSplitChange: (value: number) => void;
     onStratifiedSplitChange: (value: boolean) => void;
     onHandleURLsChange: (value: TextHandlingMode) => void;
     onHandleEmailsChange: (value: TextHandlingMode) => void;
@@ -141,11 +141,11 @@ export function PreprocessingCard({
         
                     <div>
                       <label className="text-sm text-gray-600 mb-3 block">
-                        Train/Val Split: {trainSplit[0]}/{100 - trainSplit[0]}
+                        Train/Val Split: {trainSplit}/{100 - trainSplit}
                       </label>
                       <Slider.Root
-                        value={trainSplit}
-                        onValueChange={onTrainSplitChange}
+                        value={[trainSplit]}
+                        onValueChange={(value) => onTrainSplitChange(value[0] ?? trainSplit)}
                         min={50}
                         max={95}
                         step={5}

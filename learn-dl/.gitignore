@@ -25,5 +25,3 @@ server/data/users.json
 *.sw?
 
 .env
-
-package-lock.json

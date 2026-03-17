@@ -8,7 +8,13 @@ import {
 } from "../components/TrainingVisualizations";
 
 import api from "../api/axiosClient";
-import mlClient from "../api/mlClient";
+import {
+  cancelTrainingRun,
+  getTrainingStatus,
+  startTrainingRun,
+  type TrainingPayload,
+} from "../api/mlTraining";
+import { getCurrentUserId } from "../api/session";
 import { ClassfierCard } from "../components/ClassfierCard";
 import { ModelParamsCard } from "../components/ModelParamsCard";
 import { PreprocessingCard } from "../components/PreprocessingCard";
@@ -28,7 +34,11 @@ type UploadedDatasetResult = {
 
 const PREVIEW_TEXT_LIMIT = 200;
 const TRAIN_STATUS_POLL_INTERVAL_MS = 2000;
-const DEFAULT_DATASET_TRAINING_SESSION_ID = "test";
+const DEFAULT_DATASET_TRAINING_SESSION_ID = "default-dataset-session";
+const DEFAULT_TRAIN_SPLIT = 80;
+const DEFAULT_CLASSIFIER_DROPOUT = 0.3;
+const MIN_CLASSIFIER_DROPOUT = 0.1;
+const MAX_CLASSIFIER_DROPOUT = 0.5;
 const EVALUATING_TRAINING_STATUSES = new Set(["evaluting", "evaluating"]);
 const KNOWN_TRAINING_STATUSES = new Set([
   "queued",
@@ -48,6 +58,9 @@ const TERMINAL_TRAINING_STATUSES = new Set([
 
 const toNullableString = (value: unknown): string | null =>
   value === null || value === undefined ? null : String(value);
+
+const clampClassifierDropout = (value: number) =>
+  Math.min(MAX_CLASSIFIER_DROPOUT, Math.max(MIN_CLASSIFIER_DROPOUT, value));
 
 const parseTrainingStatusUpdate = (payload: unknown) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -182,20 +195,20 @@ export function Training() {
   const [removePunctuation, setRemovePunctuation] = useState(true);
   const [removeStopwords, setRemoveStopwords] = useState(false);
   const [lemmatization, setLemmatization] = useState(false);
-  const [trainSplit, setTrainSplit] = useState([80]);
-  const [stratifiedSplut, setStratifiedSplit] = useState(false);
+  const [trainSplit, setTrainSplit] = useState(DEFAULT_TRAIN_SPLIT);
+  const [stratifiedSplit, setStratifiedSplit] = useState(false);
   const [handleURLs, setHandleURLs] = useState<TextHandlingMode>("keep");
   const [handleEmails, setHandleEmails] = useState<TextHandlingMode>("keep");
 
-  const [model, setModel] = useState("distilbert");
+  const [model, setModel] = useState("distilbert_model");
   const [epochs, setEpochs] = useState(4);
   const [batchSize, setBatchSize] = useState(32);
   const [learningRate, setLearningRate] = useState("2e-5");
-  const [evaluationFrequency, setEvaluationFrequency] = useState("1");
+  const [evaluationFrequency, setEvaluationFrequency] = useState(1);
   const [fineTune, setFineTune] = useState("freeze_all");
   const [classifierType, setClassifierType] = useState("GRU");
   const [hiddenNeurons, setHiddenNeurons] = useState(512);
-  const [classifierDropout, setClassifierDropout] = useState([30]);
+  const [classifierDropout, setClassifierDropout] = useState(DEFAULT_CLASSIFIER_DROPOUT);
 
   const [isCanceling, setIsCanceling] = useState(false);
 
@@ -381,12 +394,16 @@ export function Training() {
     let timeoutId: number | undefined;
 
     const pollTrainingStatus = async () => {
+      const trainingUserId = trainingUserIdRef.current;
+
+      if (!trainingUserId) {
+        return;
+      }
+
       try {
-        const response = await mlClient.get("/get_train_status", {
-          params: {
-            user_id: trainingUserIdRef.current,
-            training_session_id: trainingSessionID,
-          },
+        const response = await getTrainingStatus({
+          userId: trainingUserId,
+          trainingSessionId: trainingSessionID,
         });
         console.log("Polled training status update", { responseData: response.data });
         if (!isActive) {
@@ -511,12 +528,8 @@ export function Training() {
 
   const uploadDatasetFile = async (
     file: File,
-    userId: string | null,
+    userId: string,
   ): Promise<UploadedDatasetResult> => {
-    if (!userId) {
-      throw new Error("You must be logged in to upload a dataset.");
-    }
-
     const previewData = await parseRawPreviewRows(file);
 
     const presignedUrlResponse = await api.post(
@@ -557,47 +570,43 @@ export function Training() {
     };
   };
 
-  const buildTrainingPayload = (trainingDatasetUrl: string) => {
+  const buildTrainingPayload = (trainingDatasetUrl: string): TrainingPayload => {
     return {
       training_config: {
-        learning_rate: 0.001,
-        n_epochs: 1,
-        batch_size: 16,
-        eval_step: 1
+        learning_rate: learningRate,
+        n_epochs: epochs,
+        batch_size: batchSize,
+        eval_step: evaluationFrequency
       },
       data_config: {
         data_path: trainingDatasetUrl,
-        lowercase: false,
-        remove_punctuation: false,
-        remove_stopwords: false,
-        lemmatization: false,
-        handle_urls: "replace",
-        handle_emails: "replace",
-        train_ratio: 0.8,
-        test_ratio: 0.2,
-        stratify: true,
+        lowercase: lowercase,
+        remove_punctuation: removePunctuation,
+        remove_stopwords: removeStopwords,
+        lemmatization: lemmatization,
+        handle_urls: handleURLs,
+        handle_emails: handleEmails,
+        train_ratio: trainSplit / 100,
+        test_ratio: (100 - trainSplit) / 100,
+        stratify: stratifiedSplit,
         class_map: {}
       },
       embed_model_config: {
-        embed_model: "bert_model",
-        fine_tune_mode: "freeze_all"
+        embed_model: model,
+        fine_tune_mode: fineTune
       },
       classifier_config: {
-        model_name: "default",
+        model_name: modelName,
         hidden_neurons: 512,
-        dropout: 0.3,
+        dropout: clampClassifierDropout(classifierDropout),
         num_classes: 2,
-        classifier_type: "GRU"
+        classifier_type: classifierType
       }
     };
   };
 
 
   const startTraining = async () => {
-    const user = await api.get("/auth/me").then((res) => res.data.user).catch(() => null);
-
-    console.log("Current user:", user);
-
     if (!selectedDataset || selectedDataset.type === "upload") {
       alert("Please select a dataset.");
       return;
@@ -613,17 +622,14 @@ export function Training() {
     setVisualizationData(null);
 
     try {
+      const userId = await getCurrentUserId();
       const uploadedFile = getUploadedFile(selectedDataset);
       const datasetUrl = getDatasetUrl(selectedDataset);
       let trainingDatasetUrl = datasetUrl;
       let currentTrainingSessionId = DEFAULT_DATASET_TRAINING_SESSION_ID;
 
-      if (!user?.userId) {
-        throw new Error("You must be logged in to start training.");
-      }
-
       if (uploadedFile) {
-        const uploadResult = await uploadDatasetFile(uploadedFile, user.userId);
+        const uploadResult = await uploadDatasetFile(uploadedFile, userId);
         trainingDatasetUrl = uploadResult.getUrl;
         currentTrainingSessionId = uploadResult.trainingSessionId ?? "";
       }
@@ -643,21 +649,17 @@ export function Training() {
       // Continue with the training API call here after the upload succeeds.
       // Example: include `trainingDatasetUrl` in the payload sent to your backend.
       //
-      const params: Record<string, string> = {
-        user_id: String(user.userId),
-        training_session_id: currentTrainingSessionId,
-      };
-
-      console.log("Starting training with params:", params);
-
       const payload = buildTrainingPayload(trainingDatasetUrl);
+      console.log("Training payload:", payload);
 
-      const response = await mlClient.post(
-        "/train",
+      const response = await startTrainingRun(
+        {
+          userId,
+          trainingSessionId: currentTrainingSessionId,
+        },
         payload,
-        { params: params },
       );
-      trainingUserIdRef.current = String(user.userId);
+      trainingUserIdRef.current = userId;
       setTrainingSessionID(currentTrainingSessionId);
 
       const { status: parsedStatus, progress: nextProgress } =
@@ -714,12 +716,9 @@ export function Training() {
         throw new Error("Missing training session ID for cancel request.");
       }
 
-      const res = await mlClient.post("/cancel_train", null, {
-        params: {
-          user_id: trainingUserIdRef.current,
-          training_session_id: trainingSessionID,
-        },
-
+      const res = await cancelTrainingRun({
+        userId: trainingUserIdRef.current,
+        trainingSessionId: trainingSessionID,
       });
 
       const { status: nextStatus, progress: nextProgress } =
@@ -849,7 +848,7 @@ export function Training() {
               removeStopwords={removeStopwords}
               lemmatization={lemmatization}
               trainSplit={trainSplit}
-              stratifiedSplit={stratifiedSplut}
+              stratifiedSplit={stratifiedSplit}
               handleURLs={handleURLs}
               handleEmails={handleEmails}
               onLowercaseSwitchChange={setLowercase}
@@ -870,7 +869,7 @@ export function Training() {
               dropout={classifierDropout}
               onClassifierTypeChange={setClassifierType}
               onHiddenNeuronsChange={setHiddenNeurons}
-              onDropoutChange={setClassifierDropout}
+              onDropoutChange={(value) => setClassifierDropout(clampClassifierDropout(value))}
             />
 
             <ModelParamsCard

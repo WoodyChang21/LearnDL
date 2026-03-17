@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Select from "@radix-ui/react-select";
 import { ChevronDown } from "lucide-react";
-import { readStoredTrainingRuns, type TrainingRun } from "../utils/trainingRuns";
-import mlClient from "../api/mlClient";
+import {
+  predictWithTrainingSession,
+  type PredictionConfig,
+} from "../api/mlTraining";
+import { getCurrentUserId } from "../api/session";
+import {
+  getUserTrainingSessions,
+  type TrainingRun,
+} from "../api/trainingSessions";
 import {
   AttentionPanel,
   type AttentionVisualizationData,
 } from "../components/TrainingVisualizations";
 
 export function Prediction() {
-  const [trainedModels] = useState<TrainingRun[]>(readStoredTrainingRuns);
-  const [selectedModel, setSelectedModel] = useState(
-    () => readStoredTrainingRuns()[0]?.name ?? ""
-  );
+  const [trainedModels, setTrainedModels] = useState<TrainingRun[]>([]);
+  const [selectedTrainingSessionId, setSelectedTrainingSessionId] = useState("");
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [inputText, setInputText] = useState("I really loved this product, highly recommended!");
   const [prediction] = useState<{
     label: string;
@@ -20,51 +27,82 @@ export function Prediction() {
     probabilities: { label: string; value: number }[];
   } | null>(null);
   const [attentionData, setAttentionData] = useState<AttentionVisualizationData | null>(null);
+  const selectedTrainingRun =
+    trainedModels.find((model) => model.id === selectedTrainingSessionId) || null;
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadTrainingSessions = async () => {
+      setIsLoadingSessions(true);
+      setSessionsError(null);
+
+      try {
+        const sessions = await getUserTrainingSessions();
+
+        if (!isActive) {
+          return;
+        }
+
+        setTrainedModels(sessions);
+        setSelectedTrainingSessionId(sessions[0] ? sessions[0].id : "");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setSessionsError(
+          error instanceof Error ? error.message : "Failed to load training sessions."
+        );
+      } finally {
+        if (isActive) {
+          setIsLoadingSessions(false);
+        }
+      }
+    };
+
+    void loadTrainingSessions();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const handlePredict = async () => {
-    // Mock prediction
-    // const isPositive = inputText.toLowerCase().includes("love") || 
-    //                    inputText.toLowerCase().includes("great") || 
-    //                    inputText.toLowerCase().includes("recommend");
-    // setPrediction({
-    //   label: isPositive ? "Positive" : "Negative",
-    //   confidence: isPositive ? 0.94 : 0.88,
-    //   probabilities: isPositive 
-    //     ? [{ label: "Positive", value: 94 }, { label: "Negative", value: 6 }]
-    //     : [{ label: "Positive", value: 12 }, { label: "Negative", value: 88 }],
-    // });
+    if (!selectedTrainingRun) {
+      alert("Please select a training session.");
+      return;
+    }
 
-    const res = await mlClient.post(
-      "/model_output",
-      {
-        "user_input": inputText,
-        "config": {
-          "classifier_config": {
-            "model_name": "default",
-            "hidden_neurons": 512,
-            "dropout": 0.3,
-            "num_classes": 2,
-            "classifier_type": "GRU"
-          },
-          "embed_model_config": {
-            "embed_model": "bert_model",
-            "fine_tune_mode": "freeze_all",
-            "unfreeze_last_n_layers": null
-          },
-          "training_config": {
-            "learning_rate": 0.001,
-            "n_epochs": 1,
-            "batch_size": 256,
-            "eval_step": 1
-          }
-        }
+    const userId = await getCurrentUserId();
+    const predictionConfig: PredictionConfig = {
+      classifier_config: {
+        model_name: "default",
+        hidden_neurons: 512,
+        dropout: 0.3,
+        num_classes: 2,
+        classifier_type: "GRU",
       },
+      embed_model_config: {
+        embed_model: "bert_model",
+        fine_tune_mode: "freeze_all",
+        unfreeze_last_n_layers: null,
+      },
+      training_config: {
+        learning_rate: 0.001,
+        n_epochs: 1,
+        batch_size: 256,
+        eval_step: 1,
+      },
+    };
+
+    const res = await predictWithTrainingSession(
       {
-        params: {
-          user_id: "test",
-          training_session_id: "test",
-        },
-      }
+        userId,
+        trainingSessionId: selectedTrainingRun.id,
+      },
+      inputText,
+      predictionConfig,
     );
     console.log(res);
 
@@ -93,8 +131,13 @@ export function Prediction() {
       {/* Model Selector */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">Select Model</label>
-        {trainedModels.length > 0 ? (
-          <Select.Root value={selectedModel} onValueChange={setSelectedModel}>
+        {isLoadingSessions ? (
+          <div className="py-3 text-sm text-gray-500">Loading training sessions...</div>
+        ) : trainedModels.length > 0 ? (
+          <Select.Root
+            value={selectedTrainingSessionId}
+            onValueChange={setSelectedTrainingSessionId}
+          >
             <Select.Trigger className="w-full px-4 py-3 border border-gray-300 rounded-lg flex items-center justify-between bg-white hover:border-gray-400">
               <Select.Value />
               <Select.Icon>
@@ -105,9 +148,9 @@ export function Prediction() {
               <Select.Content className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-50">
                 <Select.Viewport className="p-1">
                   {trainedModels.map((model) => (
-                    <Select.Item 
-                      key={model.name} 
-                      value={model.name} 
+                    <Select.Item
+                      key={model.id}
+                      value={model.id}
                       className="px-4 py-2 hover:bg-gray-100 cursor-pointer rounded outline-none"
                     >
                       <Select.ItemText>{model.name} ({model.accuracy})</Select.ItemText>
@@ -119,7 +162,7 @@ export function Prediction() {
           </Select.Root>
         ) : (
           <div className="text-sm text-gray-500 py-3">
-            No trained models available. Please train a model first.
+            {sessionsError ?? "No trained models available. Please train a model first."}
           </div>
         )}
       </div>

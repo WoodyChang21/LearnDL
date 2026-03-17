@@ -13,10 +13,10 @@ const HIDDEN_NEURONS_OPTIONS = [64, 128, 256, 512].map((value) => ({ label: valu
 type ClassifierCardProps = {
     classifierType: string;
     hiddenNeurons: number;
-    dropout: number[];
+    dropout: number;
     onClassifierTypeChange: (value: string) => void;
     onHiddenNeuronsChange: (value: number) => void;
-    onDropoutChange: (value: number[]) => void;
+    onDropoutChange: (value: number) => void;
 }
 
 export function ClassfierCard({
@@ -64,13 +64,13 @@ export function ClassfierCard({
                     
                 <div>
                     <label className="text-sm text-gray-600 mb-3 block">
-                    Dropout: {(dropout[0] / 100).toFixed(2)}
+                    Dropout: {dropout.toFixed(2)}
                     </label>
                     <Slider.Root
-                    value={dropout}
-                    onValueChange={onDropoutChange}
-                    min={0}
-                    max={100}
+                    value={[dropout * 100]}
+                    onValueChange={(value) => onDropoutChange((value[0] ?? dropout * 100) / 100)}
+                    min={10}
+                    max={50}
                     step={1}
                     className="relative flex items-center w-full h-5"
                     >

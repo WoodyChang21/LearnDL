@@ -206,7 +206,7 @@ const metricCards: Array<{
   { key: "f1_score", label: "F1-Score", icon: Medal, iconClass: "text-orange-500" },
 ];
 
-const toPercent = (value: number) => `${value.toFixed(1)}%`;
+const toPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const lerp = (value: number, min: number, max: number) => (max === min ? 0 : (value - min) / (max - min));
 const TRAIN_COLOR = "#93C5FD";
 const VAL_COLOR = "#FCA5A5";
