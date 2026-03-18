@@ -8,6 +8,7 @@ const FINE_TUNE_MODE_OPTIONS: Array<{
   { label: "Unfreeze Last N Layers", value: "unfreeze_last_n_layers" },
   { label: "Unfreeze All", value: "unfreeze_all" },
 ];
+const BATCH_SIZE_OPTIONS = [8, 16, 32, 64, 128, 256];
 
 type ModelParamsCardProps = {
   model: string;
@@ -39,7 +40,13 @@ export function ModelParamsCard({
   onFineTuneModeChange,
 }: ModelParamsCardProps) {
   const isEpochsValid = Number.isFinite(epochs) && epochs > 0;
-  const isBatchSizeValid = Number.isFinite(batchSize) && batchSize > 0;
+  const isBatchSizeValid = BATCH_SIZE_OPTIONS.includes(batchSize);
+  const parsedLearningRate = Number(learningRate);
+  const isLearningRateValid =
+    learningRate.trim() !== "" &&
+    Number.isFinite(parsedLearningRate) &&
+    parsedLearningRate > 0 &&
+    parsedLearningRate <= 0.01;
 
     return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
@@ -106,17 +113,23 @@ export function ModelParamsCard({
 
         <div>
           <label className="block text-sm text-gray-600 mb-1">Batch size</label>
-          <input
-            type="number"
-            min={1}
+          <select
             value={batchSize}
             onChange={(event) => onBatchSizeChange(Number(event.target.value))}
             className={`w-full px-3 py-2 border rounded-lg text-sm ${
               isBatchSizeValid ? "border-gray-300" : "border-red-500"
             }`}
-          />
+          >
+            {BATCH_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           {!isBatchSizeValid && (
-            <p className="text-xs text-red-600 mt-1">Please enter a number bigger than 0.</p>
+            <p className="text-xs text-red-600 mt-1">
+              Batch size must be one of: 8, 16, 32, 64, 128, 256.
+            </p>
           )}
         </div>
 
@@ -126,8 +139,15 @@ export function ModelParamsCard({
             type="text"
             value={learningRate}
             onChange={(event) => onLearningRateChange(event.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className={`w-full px-3 py-2 border rounded-lg text-sm ${
+              isLearningRateValid ? "border-gray-300" : "border-red-500"
+            }`}
           />
+          {!isLearningRateValid && (
+            <p className="text-xs text-red-600 mt-1">
+              Learning rate must satisfy: 0 &lt; learning_rate &lt;= 0.01
+            </p>
+          )}
         </div>
 
         <div>

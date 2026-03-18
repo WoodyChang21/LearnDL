@@ -34,11 +34,13 @@ type UploadedDatasetResult = {
 
 const PREVIEW_TEXT_LIMIT = 200;
 const TRAIN_STATUS_POLL_INTERVAL_MS = 2000;
-const DEFAULT_DATASET_TRAINING_SESSION_ID = "default-dataset-session";
+const DEFAULT_DATASET_TRAINING_SESSION_ID = "default-session";
 const DEFAULT_TRAIN_SPLIT = 80;
 const DEFAULT_CLASSIFIER_DROPOUT = 0.3;
 const MIN_CLASSIFIER_DROPOUT = 0.1;
 const MAX_CLASSIFIER_DROPOUT = 0.5;
+const MAX_LEARNING_RATE = 0.01;
+const BATCH_SIZE_OPTIONS = [8, 16, 32, 64, 128, 256];
 const EVALUATING_TRAINING_STATUSES = new Set(["evaluting", "evaluating"]);
 const KNOWN_TRAINING_STATUSES = new Set([
   "queued",
@@ -61,6 +63,16 @@ const toNullableString = (value: unknown): string | null =>
 
 const clampClassifierDropout = (value: number) =>
   Math.min(MAX_CLASSIFIER_DROPOUT, Math.max(MIN_CLASSIFIER_DROPOUT, value));
+
+const isLearningRateValid = (value: string) => {
+  const parsedValue = Number(value);
+  return (
+    value.trim() !== "" &&
+    Number.isFinite(parsedValue) &&
+    parsedValue > 0 &&
+    parsedValue <= MAX_LEARNING_RATE
+  );
+};
 
 const parseTrainingStatusUpdate = (payload: unknown) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -237,7 +249,9 @@ export function Training() {
   const canStartTraining =
     !!selectedDataset &&
     selectedDataset.type !== "upload" &&
-    (selectedDataset.type !== "uploaded" || !!selectedDataset.file);
+    (selectedDataset.type !== "uploaded" || !!selectedDataset.file) &&
+    isLearningRateValid(learningRate) &&
+    BATCH_SIZE_OPTIONS.includes(batchSize);
 
   const formatPreviewText = (text: string) => {
     const compactText = text.replace(/\s+/g, " ").trim();
@@ -573,7 +587,7 @@ export function Training() {
   const buildTrainingPayload = (trainingDatasetUrl: string): TrainingPayload => {
     return {
       training_config: {
-        learning_rate: learningRate,
+        learning_rate: Number(learningRate),
         n_epochs: epochs,
         batch_size: batchSize,
         eval_step: evaluationFrequency
@@ -593,7 +607,8 @@ export function Training() {
       },
       embed_model_config: {
         embed_model: model,
-        fine_tune_mode: fineTune
+        fine_tune_mode: fineTune,
+        unfreeze_last_n_layers: null,
       },
       classifier_config: {
         model_name: modelName,
@@ -609,6 +624,16 @@ export function Training() {
   const startTraining = async () => {
     if (!selectedDataset || selectedDataset.type === "upload") {
       alert("Please select a dataset.");
+      return;
+    }
+
+    if (!BATCH_SIZE_OPTIONS.includes(batchSize)) {
+      alert("Batch size must be one of: 8, 16, 32, 64, 128, 256.");
+      return;
+    }
+
+    if (!isLearningRateValid(learningRate)) {
+      alert("Learning rate must satisfy: 0 < learning_rate <= 0.01.");
       return;
     }
 
@@ -661,6 +686,8 @@ export function Training() {
       );
       trainingUserIdRef.current = userId;
       setTrainingSessionID(currentTrainingSessionId);
+      console.log("User ID: ", userId);
+      console.log("Training Session ID: ", currentTrainingSessionId);
 
       const { status: parsedStatus, progress: nextProgress } =
         parseTrainingStatusUpdate(response.data);

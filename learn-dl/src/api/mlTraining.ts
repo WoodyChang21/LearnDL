@@ -23,11 +23,12 @@ export type TrainingPayload = {
     train_ratio: number;
     test_ratio: number;
     stratify: boolean;
-    class_map: Record<string, unknown>;
+    class_map: Record<any, any>| null;
   };
   embed_model_config: {
     embed_model: string;
     fine_tune_mode: string;
+    unfreeze_last_n_layers: number | null;
   };
   classifier_config: {
     model_name: string;

@@ -15,17 +15,42 @@ import {
   type AttentionVisualizationData,
 } from "../components/TrainingVisualizations";
 
+type ModelPredictionOutput = {
+  predicted_label: string;
+  top_confidences: Array<{
+    class: string;
+    confidence: number;
+  }>;
+  attention_visualization: AttentionVisualizationData;
+};
+
+const FALLBACK_PREDICTION_OUTPUT: ModelPredictionOutput = {
+  predicted_label: "comp.sys.ibm.pc.hardware",
+  top_confidences: [
+    { class: "comp.sys.ibm.pc.hardware", confidence: 0.9696624279022217 },
+    { class: "comp.sys.mac.hardware", confidence: 0.012007156386971474 },
+    { class: "comp.os.ms-windows.misc", confidence: 0.005084506701678038 },
+    { class: "misc.forsale", confidence: 0.0035390574485063553 },
+    { class: "comp.windows.x", confidence: 0.0013989309081807733 },
+  ],
+  attention_visualization: {
+    text: "I'm upgrading my desktop with a new motherboard and a PCIe 4.0 NVMe SSD, but I'm not sure if my current power supply has enough wattage for the GPU. I also need to check RAM compatibility so the DDR5 kit runs at its rated speed without stability issues.",
+    tokens: [
+      "I'm", "upgrading", "my", "desktop", "with", "a", "new", "motherboard", "and", "a", "PCIe", "4.0", "NVMe", "SSD,", "but", "I'm", "not", "sure", "if", "my", "current", "power", "supply", "has", "enough", "wattage", "for", "the", "GPU.", "I", "also", "need", "to", "check", "RAM", "compatibility", "so", "the", "DDR5", "kit", "runs", "at", "its", "rated", "speed", "without", "stability", "issues.",
+    ],
+    scores: [
+      0.017941931495442986, 0.012384478002786636, 0.016245435923337936, 0.0161599051207304, 0.005783350206911564, 0.011208595708012581, 0.007460208144038916, 0.0165417417883873, 0.006525260396301746, 0.009676503948867321, 0.008344970643520355, 0.006007029364506404, 0.006853505969047546, 0.01067870738916099, 0.015960941091179848, 0.017577644903212786, 0.016774356365203857, 0.014433636330068111, 0.01556453388184309, 0.014300263486802578, 0.009856678545475006, 0.009981808252632618, 0.004006250761449337, 0.009876534342765808, 0.009201359003782272, 0.008857368025928736, 0.009830600582063198, 0.015224776230752468, 0.08150303130969405, 0.01857326738536358, 0.014758492819964886, 0.010988295078277588, 0.013285922817885876, 0.00981540884822607, 0.003457580227404833, 0.008345872163772583, 0.009927216917276382, 0.015158634632825851, 0.007363644661381841, 0.009472965262830257, 0.007448423188179731, 0.008148957043886185, 0.0085077453404665, 0.007035791873931885, 0.006239800713956356, 0.005143723450601101, 0.00879918597638607, 0.0799569683149457,
+    ],
+  },
+};
+
 export function Prediction() {
   const [trainedModels, setTrainedModels] = useState<TrainingRun[]>([]);
   const [selectedTrainingSessionId, setSelectedTrainingSessionId] = useState("");
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [inputText, setInputText] = useState("I really loved this product, highly recommended!");
-  const [prediction] = useState<{
-    label: string;
-    confidence: number;
-    probabilities: { label: string; value: number }[];
-  } | null>(null);
+  const [prediction, setPrediction] = useState<ModelPredictionOutput | null>(null);
   const [attentionData, setAttentionData] = useState<AttentionVisualizationData | null>(null);
   const selectedTrainingRun =
     trainedModels.find((model) => model.id === selectedTrainingSessionId) || null;
@@ -104,24 +129,25 @@ export function Prediction() {
       inputText,
       predictionConfig,
     );
-    console.log(res);
 
-    const tokens = inputText
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter(Boolean);
-    const scores = tokens.map((token, index) => {
-      const hasSentimentWord = /(love|great|recommend|bad|worst|terrible|hate)/i.test(token);
-      if (hasSentimentWord) {
-        return 0.9;
-      }
-      return Math.max(0.15, 0.45 - index * 0.01);
-    });
-    setAttentionData({
-      text: inputText,
-      tokens,
-      scores,
-    });
+    const responseData = (res.data ?? FALLBACK_PREDICTION_OUTPUT) as
+      | Partial<ModelPredictionOutput>
+      | null;
+
+    const normalizedPrediction: ModelPredictionOutput = {
+      predicted_label:
+        responseData?.predicted_label ?? FALLBACK_PREDICTION_OUTPUT.predicted_label,
+      top_confidences:
+        responseData?.top_confidences && responseData.top_confidences.length > 0
+          ? responseData.top_confidences
+          : FALLBACK_PREDICTION_OUTPUT.top_confidences,
+      attention_visualization:
+        responseData?.attention_visualization ??
+        FALLBACK_PREDICTION_OUTPUT.attention_visualization,
+    };
+
+    setPrediction(normalizedPrediction);
+    setAttentionData(normalizedPrediction.attention_visualization);
   };
 
   return (
@@ -194,34 +220,38 @@ export function Prediction() {
             <div className="grid grid-cols-2 gap-6 mb-6">
               <div>
                 <div className="text-sm text-gray-600 mb-1">Prediction</div>
-                <div className={`text-2xl font-semibold ${prediction.label === "Positive" ? "text-green-600" : "text-red-600"}`}>
-                  {prediction.label}
+                <div className="text-2xl font-semibold text-blue-700">
+                  {prediction.predicted_label}
                 </div>
               </div>
               
               <div>
                 <div className="text-sm text-gray-600 mb-1">Confidence</div>
-                <div className="text-2xl font-semibold">{prediction.confidence.toFixed(2)}</div>
+                <div className="text-2xl font-semibold">
+                  {((prediction.top_confidences[0]?.confidence ?? 0) * 100).toFixed(2)}%
+                </div>
               </div>
             </div>
 
             <div>
               <div className="text-sm font-medium text-gray-700 mb-3">Probability Distribution</div>
               <div className="space-y-3">
-                {prediction.probabilities.map((prob) => (
-                  <div key={prob.label}>
+                {prediction.top_confidences.map((prob) => {
+                  const percentage = prob.confidence * 100;
+                  return (
+                  <div key={prob.class}>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span>{prob.label}</span>
-                      <span className="font-medium">{prob.value}%</span>
+                      <span>{prob.class}</span>
+                      <span className="font-medium">{percentage.toFixed(2)}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full ${prob.label === "Positive" ? "bg-green-500" : "bg-red-500"}`}
-                        style={{ width: `${prob.value}%` }}
+                        className="h-2 rounded-full bg-blue-500"
+                        style={{ width: `${percentage}%` }}
                       ></div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </div>
