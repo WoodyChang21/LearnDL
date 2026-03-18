@@ -30,10 +30,10 @@ def get_model_output(
 
     def _label_from_idx(idx: int):
         # class_map may come from JSON/Redis, so keys can be strings.
-        if str(idx) in id_to_label:
-            return id_to_label[str(idx)]
         if idx in id_to_label:
-            return id_to_label[idx]
+            return str(id_to_label[idx])
+        if str(idx) in id_to_label:
+            return str(id_to_label[str(idx)])
         return str(idx)
 
 
