@@ -1,4 +1,5 @@
 import * as RadioGroup from "@radix-ui/react-radio-group";
+import { InfoTooltip } from "./InfoTooltip";
 
 const FINE_TUNE_MODE_OPTIONS: Array<{
   label: string;
@@ -9,20 +10,23 @@ const FINE_TUNE_MODE_OPTIONS: Array<{
   { label: "Unfreeze All", value: "unfreeze_all" },
 ];
 const BATCH_SIZE_OPTIONS = [8, 16, 32, 64, 128, 256];
+const UNFREEZE_LAST_N_LAYER_OPTIONS = [1, 2, 3];
 
 type ModelParamsCardProps = {
   model: string;
-  epochs: number;
+  epochs: string;
   batchSize: number;
   learningRate: string;
   evaluationFrequency: number;
   fineTune: string;
+  unfreezeLastNLayers: number;
   onModelChange: (value: string) => void;
-  onEpochsChange: (value: number) => void;
+  onEpochsChange: (value: string) => void;
   onBatchSizeChange: (value: number) => void;
   onLearningRateChange: (value: string) => void;
   onEvaluationFrequencyChange: (value: number) => void;
   onFineTuneModeChange: (value: string) => void;
+  onUnfreezeLastNLayersChange: (value: number) => void;
 };
 
 export function ModelParamsCard({
@@ -32,14 +36,21 @@ export function ModelParamsCard({
   learningRate,
   evaluationFrequency,
   fineTune,
+  unfreezeLastNLayers,
   onModelChange,
   onEpochsChange,
   onBatchSizeChange,
   onLearningRateChange,
   onEvaluationFrequencyChange,
   onFineTuneModeChange,
+  onUnfreezeLastNLayersChange,
 }: ModelParamsCardProps) {
-  const isEpochsValid = Number.isFinite(epochs) && epochs > 0;
+  const parsedEpochs = Number(epochs);
+  const isEpochsValid =
+    epochs.trim() !== "" &&
+    Number.isFinite(parsedEpochs) &&
+    Number.isInteger(parsedEpochs) &&
+    parsedEpochs > 0;
   const isBatchSizeValid = BATCH_SIZE_OPTIONS.includes(batchSize);
   const parsedLearningRate = Number(learningRate);
   const isLearningRateValid =
@@ -53,7 +64,12 @@ export function ModelParamsCard({
       <h3 className="font-semibold mb-4">Model Parameters</h3>
 
       <div className="mb-4">
-        <label className="block text-sm text-gray-600 mb-3">Model</label>
+        <label className="block text-sm text-gray-600 mb-3">
+          <span className="inline-flex items-center gap-1">
+            Model
+            <InfoTooltip content="Select the embedding model architecture." />
+          </span>
+        </label>
         <RadioGroup.Root value={model} onValueChange={onModelChange} className="space-y-2">
           <div className="flex items-center">
             <RadioGroup.Item
@@ -96,23 +112,39 @@ export function ModelParamsCard({
 
       <div className="space-y-3">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Epochs</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            <span className="inline-flex items-center gap-1">
+              Epochs
+              <InfoTooltip content="Number of full passes over the training dataset." />
+            </span>
+          </label>
           <input
-            type="number"
-            min={1}
+            type="text"
+            inputMode="numeric"
             value={epochs}
-            onChange={(event) => onEpochsChange(Number(event.target.value))}
+            onChange={(event) => {
+              const digitsOnly = event.target.value.replace(/[^\d]/g, "");
+              const normalizedValue = digitsOnly.replace(/^0+(?=\d)/, "");
+              onEpochsChange(normalizedValue);
+            }}
             className={`w-full px-3 py-2 border rounded-lg text-sm ${
               isEpochsValid ? "border-gray-300" : "border-red-500"
             }`}
           />
           {!isEpochsValid && (
-            <p className="text-xs text-red-600 mt-1">Please enter a number bigger than 0.</p>
+            <p className="text-xs text-red-600 mt-1">
+              Epochs must be a whole number greater than 0.
+            </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Batch size</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            <span className="inline-flex items-center gap-1">
+              Batch size
+              <InfoTooltip content="Number of samples processed per optimization step." />
+            </span>
+          </label>
           <select
             value={batchSize}
             onChange={(event) => onBatchSizeChange(Number(event.target.value))}
@@ -134,7 +166,12 @@ export function ModelParamsCard({
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Learning rate</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            <span className="inline-flex items-center gap-1">
+              Learning rate
+              <InfoTooltip content="Step size used for gradient updates (0 < lr <= 0.01)." />
+            </span>
+          </label>
           <input
             type="text"
             value={learningRate}
@@ -151,7 +188,12 @@ export function ModelParamsCard({
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Evaluation frequency</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            <span className="inline-flex items-center gap-1">
+              Evaluation frequency
+              <InfoTooltip content="How often to run validation during training." />
+            </span>
+          </label>
           <input
             type="text"
             min={1}
@@ -162,7 +204,10 @@ export function ModelParamsCard({
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="text-sm">Fine Tune Mode</label>
+          <label className="text-sm flex items-center gap-1">
+            Fine Tune Mode
+            <InfoTooltip content="Choose how many encoder layers are trainable." />
+          </label>
           <select
             value={fineTune}
             onChange={(event) => onFineTuneModeChange(event.target.value)}
@@ -175,6 +220,27 @@ export function ModelParamsCard({
             ))}
           </select>
         </div>
+        {fineTune === "unfreeze_last_n_layers" && (
+          <div className="flex items-center justify-between">
+            <label className="text-sm flex items-center gap-1">
+              Unfreeze Last N Layers
+              <InfoTooltip content="Number of last encoder layers to unfreeze (1-3)." />
+            </label>
+            <select
+              value={unfreezeLastNLayers}
+              onChange={(event) =>
+                onUnfreezeLastNLayersChange(Number(event.target.value))
+              }
+              className="min-w-28 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {UNFREEZE_LAST_N_LAYER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );

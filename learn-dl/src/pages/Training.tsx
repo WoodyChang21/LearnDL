@@ -16,6 +16,7 @@ import {
 } from "../api/mlTraining";
 import { getCurrentUserId } from "../api/session";
 import { ClassfierCard } from "../components/ClassfierCard";
+import { InfoTooltip } from "../components/InfoTooltip";
 import { ModelParamsCard } from "../components/ModelParamsCard";
 import { PreprocessingCard } from "../components/PreprocessingCard";
 import { SelectedCard, type SelectedCardOption } from "../components/SelectedCard";
@@ -72,6 +73,18 @@ const isLearningRateValid = (value: string) => {
     parsedValue > 0 &&
     parsedValue <= MAX_LEARNING_RATE
   );
+};
+
+const parseEpochs = (value: string) => {
+  const parsedValue = Number(value);
+  return (
+    value.trim() !== "" &&
+    Number.isFinite(parsedValue) &&
+    Number.isInteger(parsedValue) &&
+    parsedValue > 0
+  )
+    ? parsedValue
+    : null;
 };
 
 const parseTrainingStatusUpdate = (payload: unknown) => {
@@ -213,11 +226,12 @@ export function Training() {
   const [handleEmails, setHandleEmails] = useState<TextHandlingMode>("keep");
 
   const [model, setModel] = useState("distilbert_model");
-  const [epochs, setEpochs] = useState(4);
+  const [epochs, setEpochs] = useState("4");
   const [batchSize, setBatchSize] = useState(32);
   const [learningRate, setLearningRate] = useState("2e-5");
   const [evaluationFrequency, setEvaluationFrequency] = useState(1);
   const [fineTune, setFineTune] = useState("freeze_all");
+  const [unfreezeLastNLayers, setUnfreezeLastNLayers] = useState(1);
   const [classifierType, setClassifierType] = useState("GRU");
   const [hiddenNeurons, setHiddenNeurons] = useState(512);
   const [classifierDropout, setClassifierDropout] = useState(DEFAULT_CLASSIFIER_DROPOUT);
@@ -250,6 +264,7 @@ export function Training() {
     !!selectedDataset &&
     selectedDataset.type !== "upload" &&
     (selectedDataset.type !== "uploaded" || !!selectedDataset.file) &&
+    parseEpochs(epochs) !== null &&
     isLearningRateValid(learningRate) &&
     BATCH_SIZE_OPTIONS.includes(batchSize);
 
@@ -585,10 +600,12 @@ export function Training() {
   };
 
   const buildTrainingPayload = (trainingDatasetUrl: string): TrainingPayload => {
+    const validEpochs = parseEpochs(epochs) ?? 1;
+
     return {
       training_config: {
         learning_rate: Number(learningRate),
-        n_epochs: epochs,
+        n_epochs: validEpochs,
         batch_size: batchSize,
         eval_step: evaluationFrequency
       },
@@ -608,7 +625,8 @@ export function Training() {
       embed_model_config: {
         embed_model: model,
         fine_tune_mode: fineTune,
-        unfreeze_last_n_layers: null,
+        unfreeze_last_n_layers:
+          fineTune === "unfreeze_last_n_layers" ? unfreezeLastNLayers : null,
       },
       classifier_config: {
         model_name: modelName,
@@ -624,6 +642,11 @@ export function Training() {
   const startTraining = async () => {
     if (!selectedDataset || selectedDataset.type === "upload") {
       alert("Please select a dataset.");
+      return;
+    }
+
+    if (parseEpochs(epochs) === null) {
+      alert("Epochs must be a whole number greater than 0.");
       return;
     }
 
@@ -782,7 +805,12 @@ export function Training() {
         <h1 className="mb-6 text-3xl">Training</h1>
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <label className="mb-2 block text-sm font-medium text-gray-700">Model Name</label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            <span className="inline-flex items-center gap-1">
+              Model Name
+              <InfoTooltip content="A unique name to identify this trained model later." />
+            </span>
+          </label>
           <input
             type="text"
             value={modelName}
@@ -800,6 +828,7 @@ export function Training() {
             <SelectedCard
               title="Dataset"
               selectLabel="Select Dataset"
+              selectLabelTooltip="Choose a default dataset or upload your own CSV file."
               options={datasetOptions}
               selectedValue={selectedDatasetId}
               onSelectedValueChange={handleDatasetSelection}
@@ -906,12 +935,14 @@ export function Training() {
               learningRate={learningRate}
               evaluationFrequency={evaluationFrequency}
               fineTune={fineTune}
+              unfreezeLastNLayers={unfreezeLastNLayers}
               onModelChange={setModel}
               onEpochsChange={setEpochs}
               onBatchSizeChange={setBatchSize}
               onLearningRateChange={setLearningRate}
               onEvaluationFrequencyChange={setEvaluationFrequency}
               onFineTuneModeChange={setFineTune}
+              onUnfreezeLastNLayersChange={setUnfreezeLastNLayers}
             />
           </div>
         </div>

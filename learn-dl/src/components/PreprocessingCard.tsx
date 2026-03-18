@@ -1,6 +1,7 @@
 import * as Switch from "@radix-ui/react-switch";
 import * as Slider from "@radix-ui/react-slider";
 import type { TextHandlingMode } from "../type";
+import { InfoTooltip } from "./InfoTooltip";
 
 const TEXT_HANDLING_OPTIONS: Array<{
     label: string;
@@ -54,7 +55,10 @@ export function PreprocessingCard({
                     
                     <div className="space-y-4 mb-6">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Lowercase</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Lowercase
+                          <InfoTooltip content="Convert text to lowercase before tokenization." />
+                        </label>
                         <Switch.Root
                           checked={lowercase}
                           onCheckedChange={onLowercaseSwitchChange}
@@ -65,7 +69,10 @@ export function PreprocessingCard({
                       </div>
         
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Remove punctuation</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Remove punctuation
+                          <InfoTooltip content="Remove punctuation characters from text." />
+                        </label>
                         <Switch.Root
                           checked={removePunctuation}
                           onCheckedChange={onPunctuationSwitchChange}
@@ -76,7 +83,10 @@ export function PreprocessingCard({
                       </div>
         
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Remove stopwords</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Remove stopwords
+                          <InfoTooltip content='Remove common words like "the", "is", and "and".' />
+                        </label>
                         <Switch.Root
                           checked={removeStopwords}
                           onCheckedChange={onStopwordsSwitchChange}
@@ -87,7 +97,10 @@ export function PreprocessingCard({
                       </div>
         
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Lemmatization</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Lemmatization
+                          <InfoTooltip content='Reduce words to their base form (e.g. "running" to "run").' />
+                        </label>
                         <Switch.Root
                           checked={lemmatization}
                           onCheckedChange={onLemmatizationSwitchChange}
@@ -98,7 +111,10 @@ export function PreprocessingCard({
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Stratified split</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Stratified split
+                          <InfoTooltip content="Keep label proportions consistent between train and validation splits." />
+                        </label>
                         <Switch.Root
                           checked={stratifiedSplit}
                           onCheckedChange={onStratifiedSplitChange}
@@ -109,7 +125,10 @@ export function PreprocessingCard({
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Handle emails</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Handle emails
+                          <InfoTooltip content="Choose to keep, remove, or replace email addresses." />
+                        </label>
                         <select
                           value={handleEmails}
                           onChange={(event) => onHandleEmailsChange(event.target.value as TextHandlingMode)}
@@ -124,7 +143,10 @@ export function PreprocessingCard({
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <label className="text-sm">Handle URLs</label>
+                        <label className="text-sm flex items-center gap-1">
+                          Handle URLs
+                          <InfoTooltip content="Choose to keep, remove, or replace URLs." />
+                        </label>
                         <select
                           value={handleURLs}
                           onChange={(event) => onHandleURLsChange(event.target.value as TextHandlingMode)}
@@ -140,8 +162,9 @@ export function PreprocessingCard({
                     </div>
         
                     <div>
-                      <label className="text-sm text-gray-600 mb-3 block">
+                      <label className="text-sm text-gray-600 mb-3 flex items-center gap-1">
                         Train/Val Split: {trainSplit}/{100 - trainSplit}
+                        <InfoTooltip content="Controls how much data goes to train vs validation." />
                       </label>
                       <Slider.Root
                         value={[trainSplit]}

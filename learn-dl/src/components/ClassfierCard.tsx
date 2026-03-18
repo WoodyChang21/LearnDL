@@ -1,4 +1,5 @@
 import * as Slider from "@radix-ui/react-slider";
+import { InfoTooltip } from "./InfoTooltip";
 
 const CLASSIFIER_OPTIONS: Array<{
     label: string;
@@ -32,7 +33,10 @@ export function ClassfierCard({
             <h3 className="font-semibold mb-4">Classifier Configuration</h3>
             <div className="space-y-4 mb-6">
                 <div className="flex items-center justify-between">
-                    <label className="text-sm">Classifier Type</label>
+                    <label className="text-sm flex items-center gap-1">
+                        Classifier Type
+                        <InfoTooltip content="Choose model head type (e.g., GRU or Linear)." />
+                    </label>
                     <select
                         value={classifierType}
                         onChange={(event) => onClassifierTypeChange(event.target.value)}
@@ -48,7 +52,10 @@ export function ClassfierCard({
 
 
                 <div className="flex items-center justify-between">
-                    <label className="text-sm">Hidden Neurons</label>
+                    <label className="text-sm flex items-center gap-1">
+                        Hidden Neurons
+                        <InfoTooltip content="Number of hidden units in the classifier layer." />
+                    </label>
                     <select
                         value={hiddenNeurons}
                         onChange={(event) => onHiddenNeuronsChange(Number(event.target.value))}
@@ -63,8 +70,9 @@ export function ClassfierCard({
                 </div>
                     
                 <div>
-                    <label className="text-sm text-gray-600 mb-3 block">
+                    <label className="text-sm text-gray-600 mb-3 flex items-center gap-1">
                     Dropout: {dropout.toFixed(2)}
+                    <InfoTooltip content="Regularization rate to reduce overfitting." />
                     </label>
                     <Slider.Root
                     value={[dropout * 100]}

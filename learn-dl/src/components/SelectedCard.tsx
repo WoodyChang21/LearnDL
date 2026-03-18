@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as Select from "@radix-ui/react-select";
 import { ChevronDown, Loader2 } from "lucide-react";
+import { InfoTooltip } from "./InfoTooltip";
 
 export type SelectedCardOption = {
   value: string;
@@ -18,6 +19,7 @@ export type SelectedCardChildrenArgs = {
 type SelectedCardProps = {
   title: string;
   selectLabel?: string;
+  selectLabelTooltip?: string;
   optionsEndpoint?: string;
   options?: SelectedCardOption[];
   selectedValue: string;
@@ -83,6 +85,7 @@ function parseOptions(payload: unknown): SelectedCardOption[] {
 export function SelectedCard({
   title,
   selectLabel = "Select Option",
+  selectLabelTooltip,
   optionsEndpoint,
   options: providedOptions,
   selectedValue,
@@ -197,8 +200,11 @@ export function SelectedCard({
 
       <div className="mb-4">
         <label className="block text-sm text-gray-600 mb-2">
-          {selectLabel}
-          {required ? " *" : ""}
+          <span className="inline-flex items-center gap-1">
+            {selectLabel}
+            {required ? " *" : ""}
+            {selectLabelTooltip ? <InfoTooltip content={selectLabelTooltip} /> : null}
+          </span>
         </label>
 
         {isLoading && (
