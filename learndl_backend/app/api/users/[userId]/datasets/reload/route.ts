@@ -76,12 +76,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!datasetid) {
-        return withCors(
-          NextResponse.json({ error: "datasetid is required" }, { status: 400 }),
-          req
-        );
-      }
 
     if (isDefault === undefined) {
         return withCors(
