@@ -30,11 +30,8 @@ async def model_output_endpoint(
 ):
     """Return model predictions and top-5 (or all) class confidences."""
     get_model_output = _get_pipeline()
-    predicted, top_confidences = get_model_output(request.user_input, user_id, training_session_id, request.config)
-    return {
-        "output": predicted,
-        "confidences": top_confidences,
-    }
+    model_prediction = get_model_output(request.user_input, user_id, training_session_id, request.config)
+    return model_prediction
 
 
 # @router.get("/model_accuracy")
