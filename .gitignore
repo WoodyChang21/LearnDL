@@ -225,3 +225,6 @@ database/embeddings.db
 
 # Google Colab
 *.ipynb
+
+
+!/learndl_backend/lib/
