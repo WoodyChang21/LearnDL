@@ -41,27 +41,6 @@ export type TrainingPayload = {
   };
 };
 
-export type PredictionConfig = {
-  classifier_config: {
-    model_name: string;
-    hidden_neurons: number;
-    dropout: number;
-    num_classes: number;
-    classifier_type: string;
-  };
-  embed_model_config: {
-    embed_model: string;
-    fine_tune_mode: string;
-    unfreeze_last_n_layers: number | null;
-  };
-  training_config: {
-    learning_rate: number | string;
-    n_epochs: number;
-    batch_size: number;
-    eval_step: number;
-  };
-};
-
 export type UserDatasetSummary = {
   datasetId: string;
   csvName: string;
@@ -95,7 +74,7 @@ export const cancelTrainingRun = (params: TrainingRequestParams) =>
 export const predictWithTrainingSession = (
   params: TrainingRequestParams,
   userInput: string,
-  config: PredictionConfig,
+  config: TrainingPayload | any,
 ) =>
   mlClient.post(
     "/model_output",
@@ -123,4 +102,38 @@ export const deleteUserDataset = async (userId: string, datasetId: string) => {
   await api.delete(`/users/${userId}/datasets/delete`, {
     data: { datasetId },
   });
+};
+
+export const deleteTrainingSession = async (userId: string, trainingSessionId: string) => {
+  const response = await api.delete(`/users/${userId}/training_sessions/delete`, {
+    data: { sessionId: trainingSessionId },
+  });
+  console.log("Response of deletion: ", response);
+  return response.data;
+};
+
+
+// Store trained model in the database
+export const storeTrainedModel = async (
+  trainingSessionId: string,
+  hyperParams: Record<string, unknown> | null,
+  metrics: Record<string, unknown> | null,
+  modelName?: string,
+) => {
+  const userId = await getCurrentUserId();
+  console.log("storeTrainedModel called with", {
+    userId,
+    trainingSessionId,
+    modelName,
+    hyperParams,
+    metrics,
+  });
+  const response = await api.put(`/users/${userId}/training_sessions/store_result`, {
+    trainingSessionId,
+    modelName,
+    hyperParams,
+    metrics,
+  });
+  console.log("storeTrainedModel response", response.data);
+  return response.data;
 };

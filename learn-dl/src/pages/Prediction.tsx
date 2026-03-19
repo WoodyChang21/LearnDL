@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import * as Select from "@radix-ui/react-select";
-import { ChevronDown } from "lucide-react";
 import {
+  deleteTrainingSession,
   predictWithTrainingSession,
-  type PredictionConfig,
 } from "../api/mlTraining";
 import { getCurrentUserId } from "../api/session";
 import {
   getUserTrainingSessions,
   type TrainingRun,
 } from "../api/trainingSessions";
+import { SelectedCard, type SelectedCardOption } from "../components/SelectedCard";
 import {
   AttentionPanel,
   type AttentionVisualizationData,
@@ -50,10 +49,16 @@ export function Prediction() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [inputText, setInputText] = useState("I really loved this product, highly recommended!");
+  const [isPredicting, setIsPredicting] = useState(false);
   const [prediction, setPrediction] = useState<ModelPredictionOutput | null>(null);
   const [attentionData, setAttentionData] = useState<AttentionVisualizationData | null>(null);
   const selectedTrainingRun =
     trainedModels.find((model) => model.id === selectedTrainingSessionId) || null;
+  const sessionOptions: SelectedCardOption[] = trainedModels.map((model) => ({
+    value: model.id,
+    label: `${model.name} (${model.accuracy})`,
+    deletable: true,
+  }));
 
   useEffect(() => {
     let isActive = true;
@@ -93,61 +98,85 @@ export function Prediction() {
     };
   }, []);
 
+  const handleTrainingSessionDelete = async (trainingSessionId: string) => {
+    const userId = await getCurrentUserId();
+    await deleteTrainingSession(userId, trainingSessionId);
+  };
+
+  const handleTrainingSessionDeleted = (trainingSessionId: string) => {
+    const remainingModels = trainedModels.filter((model) => model.id !== trainingSessionId);
+
+    setTrainedModels(remainingModels);
+    setSelectedTrainingSessionId(
+      selectedTrainingSessionId === trainingSessionId ? (remainingModels[0]?.id ?? "") : selectedTrainingSessionId,
+    );
+
+    if (selectedTrainingSessionId === trainingSessionId) {
+      setPrediction(null);
+      setAttentionData(null);
+    }
+  };
+
   const handlePredict = async () => {
+    if (isPredicting) {
+      return;
+    }
+
     if (!selectedTrainingRun) {
       alert("Please select a training session.");
       return;
     }
 
-    const userId = await getCurrentUserId();
-    const predictionConfig: PredictionConfig = {
-      classifier_config: {
-        model_name: "default",
-        hidden_neurons: 512,
-        dropout: 0.3,
-        num_classes: 2,
-        classifier_type: "GRU",
-      },
-      embed_model_config: {
-        embed_model: "bert_model",
-        fine_tune_mode: "freeze_all",
-        unfreeze_last_n_layers: null,
-      },
-      training_config: {
-        learning_rate: 0.001,
-        n_epochs: 1,
-        batch_size: 256,
-        eval_step: 1,
-      },
-    };
+    if (!selectedTrainingRun.hyperParams) {
+      alert("This training session does not have saved hyperparameters.");
+      return;
+    }
 
-    const res = await predictWithTrainingSession(
-      {
+    setIsPredicting(true);
+
+    try {
+      const userId = await getCurrentUserId();
+      console.log("Params and payload: ", {
         userId,
-        trainingSessionId: selectedTrainingRun.id,
-      },
-      inputText,
-      predictionConfig,
-    );
+        inputText,
+        selectedTrainingRun,
+      });
 
-    const responseData = (res.data ?? FALLBACK_PREDICTION_OUTPUT) as
-      | Partial<ModelPredictionOutput>
-      | null;
+      const res = await predictWithTrainingSession(
+        {
+          userId,
+          trainingSessionId: selectedTrainingRun.id,
+        },
+        inputText,
+        selectedTrainingRun.hyperParams,
+      );
 
-    const normalizedPrediction: ModelPredictionOutput = {
-      predicted_label:
-        responseData?.predicted_label ?? FALLBACK_PREDICTION_OUTPUT.predicted_label,
-      top_confidences:
-        responseData?.top_confidences && responseData.top_confidences.length > 0
-          ? responseData.top_confidences
-          : FALLBACK_PREDICTION_OUTPUT.top_confidences,
-      attention_visualization:
-        responseData?.attention_visualization ??
-        FALLBACK_PREDICTION_OUTPUT.attention_visualization,
-    };
+      console.log("Response: ", res);
 
-    setPrediction(normalizedPrediction);
-    setAttentionData(normalizedPrediction.attention_visualization);
+      const responseData = (res.data ?? FALLBACK_PREDICTION_OUTPUT) as
+        | Partial<ModelPredictionOutput>
+        | null;
+
+      const normalizedPrediction: ModelPredictionOutput = {
+        predicted_label:
+          responseData?.predicted_label ?? FALLBACK_PREDICTION_OUTPUT.predicted_label,
+        top_confidences:
+          responseData?.top_confidences && responseData.top_confidences.length > 0
+            ? responseData.top_confidences
+            : FALLBACK_PREDICTION_OUTPUT.top_confidences,
+        attention_visualization:
+          responseData?.attention_visualization ??
+          FALLBACK_PREDICTION_OUTPUT.attention_visualization,
+      };
+
+      setPrediction(normalizedPrediction);
+      setAttentionData(normalizedPrediction.attention_visualization);
+    } catch (error) {
+      console.error("Failed to predict", error);
+      alert(error instanceof Error ? error.message : "Prediction failed.");
+    } finally {
+      setIsPredicting(false);
+    }
   };
 
   return (
@@ -155,43 +184,26 @@ export function Prediction() {
       <h1 className="text-3xl mb-8">Prediction</h1>
 
       {/* Model Selector */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Model</label>
-        {isLoadingSessions ? (
+      {isLoadingSessions ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Model</label>
           <div className="py-3 text-sm text-gray-500">Loading training sessions...</div>
-        ) : trainedModels.length > 0 ? (
-          <Select.Root
-            value={selectedTrainingSessionId}
-            onValueChange={setSelectedTrainingSessionId}
-          >
-            <Select.Trigger className="w-full px-4 py-3 border border-gray-300 rounded-lg flex items-center justify-between bg-white hover:border-gray-400">
-              <Select.Value />
-              <Select.Icon>
-                <ChevronDown className="size-4" />
-              </Select.Icon>
-            </Select.Trigger>
-            <Select.Portal>
-              <Select.Content className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-50">
-                <Select.Viewport className="p-1">
-                  {trainedModels.map((model) => (
-                    <Select.Item
-                      key={model.id}
-                      value={model.id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer rounded outline-none"
-                    >
-                      <Select.ItemText>{model.name} ({model.accuracy})</Select.ItemText>
-                    </Select.Item>
-                  ))}
-                </Select.Viewport>
-              </Select.Content>
-            </Select.Portal>
-          </Select.Root>
-        ) : (
-          <div className="text-sm text-gray-500 py-3">
-            {sessionsError ?? "No trained models available. Please train a model first."}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="mb-6">
+          <SelectedCard
+            title="Model Selector"
+            selectLabel="Select Model"
+            options={sessionOptions}
+            selectedValue={selectedTrainingSessionId}
+            onSelectedValueChange={setSelectedTrainingSessionId}
+            onDelete={handleTrainingSessionDelete}
+            onOptionDeleted={handleTrainingSessionDeleted}
+            placeholder="Choose a model"
+            emptyMessage={sessionsError ?? "No trained models available. Please train a model first."}
+          />
+        </div>
+      )}
 
       {/* Input Panel */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-6">
@@ -205,9 +217,10 @@ export function Prediction() {
         />
         <button
           onClick={handlePredict}
-          className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          disabled={isPredicting}
+          className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:cursor-not-allowed disabled:bg-blue-400"
         >
-          Predict
+          {isPredicting ? "Predicting..." : "Predict"}
         </button>
       </div>
 

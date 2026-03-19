@@ -1,4 +1,5 @@
 import type { TrainingVisualizationData } from "../components/TrainingVisualizations";
+import type { TrainingPayload } from "./mlTraining";
 import api from "./axiosClient";
 import { getCurrentUserId } from "./session";
 
@@ -22,39 +23,23 @@ export interface TrainingRun {
   accuracy: string;
   date: string;
   config: TrainingRunConfig;
+  datasetPreview: Record<string, unknown>[];
+  hyperParams: TrainingPayload | null;
   visualizationData?: TrainingVisualizationData;
 }
 
-type BackendTrainingSession = {
+export type BackendTrainingSession = {
   sessionId: string;
+  userId: string;
+  datasetId: string;
   modelName: string;
   createdAt: string;
   dataset: {
     csvName: string;
+    preview: Record<string, unknown>[] | null;
   };
-  hyperParams: null | {
-    training_config: {
-      n_epochs: number;
-      batch_size: number;
-      learning_rate: number | string;
-    };
-    embed_model_config: {
-      fine_tune_mode: string;
-    };
-    data_config: {
-      train_ratio: number;
-      lowercase: boolean;
-      remove_punctuation: boolean;
-      remove_stopwords: boolean;
-      lemmatization: boolean;
-    };
-    classifier_config: {
-      classifier_type: string;
-    };
-  };
-  metrics: null | {
-    accuracy: number;
-  };
+  hyperParams: TrainingPayload | null;
+  metrics: TrainingVisualizationData | null;
 };
 
 const formatAccuracy = (accuracy: number) => {
@@ -79,42 +64,53 @@ const defaultTrainingRunConfig: TrainingRunConfig = {
   lemmatization: false,
 };
 
-const mapTrainingSession = (session: BackendTrainingSession): TrainingRun => {
-  const trainingConfig = session.hyperParams?.training_config;
-  const embedModelConfig = session.hyperParams?.embed_model_config;
-  const dataConfig = session.hyperParams?.data_config;
-  const classifierConfig = session.hyperParams?.classifier_config;
+const getSessionAccuracy = (metrics: TrainingVisualizationData | null) =>
+  metrics?.metrics.accuracy ?? null;
 
+const getTrainingRunConfig = (
+  hyperParams: BackendTrainingSession["hyperParams"],
+): TrainingRunConfig => {
+  const trainingConfig = hyperParams?.training_config;
+  const embedModelConfig = hyperParams?.embed_model_config;
+  const dataConfig = hyperParams?.data_config;
+
+  return {
+    ...defaultTrainingRunConfig,
+    ...(trainingConfig
+      ? {
+          epochs: trainingConfig.n_epochs,
+          batchSize: trainingConfig.batch_size,
+          learningRate: String(trainingConfig.learning_rate),
+        }
+      : {}),
+    ...(dataConfig
+      ? {
+          trainSplit: toTrainSplit(dataConfig.train_ratio),
+          lowercase: dataConfig.lowercase,
+          removePunctuation: dataConfig.remove_punctuation,
+          removeStopwords: dataConfig.remove_stopwords,
+          lemmatization: dataConfig.lemmatization,
+        }
+      : {}),
+    fineTune: embedModelConfig
+      ? embedModelConfig.fine_tune_mode !== "freeze_all"
+      : defaultTrainingRunConfig.fineTune,
+  };
+};
+
+const mapTrainingSession = (session: BackendTrainingSession): TrainingRun => {
+  const accuracy = getSessionAccuracy(session.metrics);
   return {
     id: session.sessionId,
     name: session.modelName,
-    model: classifierConfig?.classifier_type || "Unknown",
+    model: session.hyperParams?.classifier_config.classifier_type ?? "Unknown",
     dataset: session.dataset.csvName,
-    accuracy: session.metrics ? formatAccuracy(session.metrics.accuracy) : "N/A",
+    accuracy: accuracy !== null ? formatAccuracy(accuracy) : "N/A",
     date: new Date(session.createdAt).toLocaleDateString(),
-    config: {
-      epochs: trainingConfig ? trainingConfig.n_epochs : defaultTrainingRunConfig.epochs,
-      batchSize: trainingConfig ? trainingConfig.batch_size : defaultTrainingRunConfig.batchSize,
-      learningRate: trainingConfig
-        ? String(trainingConfig.learning_rate)
-        : defaultTrainingRunConfig.learningRate,
-      fineTune: embedModelConfig
-        ? embedModelConfig.fine_tune_mode !== "freeze_all"
-        : defaultTrainingRunConfig.fineTune,
-      trainSplit: dataConfig
-        ? toTrainSplit(dataConfig.train_ratio)
-        : defaultTrainingRunConfig.trainSplit,
-      lowercase: dataConfig ? dataConfig.lowercase : defaultTrainingRunConfig.lowercase,
-      removePunctuation: dataConfig
-        ? dataConfig.remove_punctuation
-        : defaultTrainingRunConfig.removePunctuation,
-      removeStopwords: dataConfig
-        ? dataConfig.remove_stopwords
-        : defaultTrainingRunConfig.removeStopwords,
-      lemmatization: dataConfig
-        ? dataConfig.lemmatization
-        : defaultTrainingRunConfig.lemmatization,
-    },
+    config: getTrainingRunConfig(session.hyperParams),
+    datasetPreview: session.dataset.preview ?? [],
+    hyperParams: session.hyperParams,
+    visualizationData: session.metrics ?? undefined,
   };
 };
 

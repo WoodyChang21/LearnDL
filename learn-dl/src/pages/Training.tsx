@@ -3,14 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Progress from "@radix-ui/react-progress";
 import { Upload } from "lucide-react";
 import Papa from "papaparse";
-
 import api from "../api/axiosClient";
 import {
   cancelTrainingRun,
+  deleteTrainingSession,
   deleteUserDataset,
   getTrainingStatus,
   readUserDataset,
   startTrainingRun,
+  storeTrainedModel,
   type TrainingPayload,
 } from "../api/mlTraining";
 import { getCurrentUserId } from "../api/session";
@@ -42,7 +43,6 @@ type ReloadedDatasetResult = {
 
 const PREVIEW_TEXT_LIMIT = 200;
 const TRAIN_STATUS_POLL_INTERVAL_MS = 2000;
-const DEFAULT_DATASET_TRAINING_SESSION_ID = "default-session";
 const DEFAULT_TRAIN_SPLIT = 80;
 const DEFAULT_CLASSIFIER_DROPOUT = 0.3;
 const MIN_CLASSIFIER_DROPOUT = 0.1;
@@ -68,19 +68,28 @@ const TERMINAL_TRAINING_STATUSES = new Set([
 
 const DEFAULT_DATASETS: Dataset[] = [
   {
-    id: "imdb",
+    id: "00000000-0000-0000-0000-000000000002",
+    datasetId: "00000000-0000-0000-0000-000000000002",
+    csvName: "IMDB.csv",
+    isDefault: true,
     label: "IMDB Sentiment",
     type: "default",
     url: import.meta.env.VITE_IMDB_DATASET_URL,
   },
   {
-    id: "sms",
+    id: "00000000-0000-0000-0000-000000000001",
+    datasetId: "00000000-0000-0000-0000-000000000001",
+    csvName: "spam.csv",
+    isDefault: true,
     label: "SMS Spam",
     type: "default",
     url: import.meta.env.VITE_SMS_DATASET_URL,
   },
   {
-    id: "agnews",
+    id: "00000000-0000-0000-0000-000000000000",
+    datasetId: "00000000-0000-0000-0000-000000000000",
+    csvName: "News.csv",
+    isDefault: true,
     label: "AG News",
     type: "default",
     url: import.meta.env.VITE_AGNEWS_DATASET_URL,
@@ -210,9 +219,6 @@ const normalizeTrainingStatus = (status: string | null) => {
 
 const getUploadedFile = (dataset: Dataset | null) =>
   dataset?.type === "uploaded" ? dataset.file ?? null : null;
-
-const getDatasetUrl = (dataset: Dataset | null) =>
-  dataset?.type === "default" ? dataset.url ?? null : null;
 
 export function Training() {
   const [isTraining, setIsTraining] = useState(false);
@@ -519,6 +525,8 @@ export function Training() {
           trainingSessionId: trainingSessionID,
         });
 
+        console.log("Polled training status update", response.data);
+
         if (!isMounted) {
           return;
         }
@@ -532,7 +540,7 @@ export function Training() {
           setTrainingStatus(normalizedStatus);
         }
 
-        if (normalizedStatus === "evaluating" || normalizedStatus === "completed") {
+        if (normalizedStatus === "evaluating") {
           setProgress(100);
         } else if (nextProgress !== null) {
           setProgress(nextProgress);
@@ -549,6 +557,19 @@ export function Training() {
             setProgress(100);
             setHasResults(true);
             setVisualizationData(response.data.result);
+
+            if (trainingSessionID) {
+              try {
+                await storeTrainedModel(
+                  trainingSessionID,
+                  response.data.config,
+                  response.data.result,
+                  modelName.trim(),
+                );
+              } catch (storeError) {
+                console.error("Failed to store trained model", storeError);
+              }
+            }
           }
 
           setIsTraining(false);
@@ -790,16 +811,18 @@ export function Training() {
     try {
       const userId = await getCurrentUserId();
       const uploadedFile = getUploadedFile(selectedDataset);
-      const datasetUrl = getDatasetUrl(selectedDataset);
 
-      let trainingDatasetUrl = datasetUrl;
-      let currentTrainingSessionId = DEFAULT_DATASET_TRAINING_SESSION_ID;
+      let trainingDatasetUrl: string | null = null;
+      let currentTrainingSessionId = "";
 
       if (uploadedFile) {
         const uploadResult = await uploadDatasetFile(uploadedFile, userId);
         trainingDatasetUrl = uploadResult.getUrl;
         currentTrainingSessionId = uploadResult.trainingSessionId ?? "";
-      } else if (selectedDataset.type === "saved") {
+      } else if (
+        selectedDataset.type === "saved" ||
+        selectedDataset.type === "default"
+      ) {
         const reloadResult = await reloadDatasetFile(selectedDataset, userId);
         trainingDatasetUrl = reloadResult.getUrl;
         currentTrainingSessionId = reloadResult.trainingSessionId ?? "";
@@ -814,6 +837,12 @@ export function Training() {
       }
 
       const payload = buildTrainingPayload(trainingDatasetUrl);
+
+      console.log("Params: ", {
+        userId,
+        currentTrainingSessionId})
+      console.log("Starting training with dataset URL:", trainingDatasetUrl);
+      console.log("Starting training with payload", payload);
 
       const response = await startTrainingRun(
         {
@@ -880,9 +909,12 @@ export function Training() {
         throw new Error("Missing training session ID for cancel request.");
       }
 
+      const currentUserId = trainingUserIdRef.current;
+      const currentTrainingSessionId = trainingSessionID;
+
       const res = await cancelTrainingRun({
-        userId: trainingUserIdRef.current,
-        trainingSessionId: trainingSessionID,
+        userId: currentUserId,
+        trainingSessionId: currentTrainingSessionId,
       });
 
       const { status: nextStatus, progress: nextProgress } =
@@ -890,24 +922,21 @@ export function Training() {
       const nextError = parseTrainingError(res.data);
       const normalizedStatus = normalizeTrainingStatus(nextStatus);
 
-      setTrainingStatus(normalizedStatus);
-
-      if (normalizedStatus === "evaluating" || normalizedStatus === "completed") {
-        setProgress(100);
-      } else if (nextProgress !== null) {
-        setProgress(nextProgress);
-      }
-
       if (nextError) {
-        setTrainingError(nextError);
-      } else if (normalizedStatus !== "error") {
-        setTrainingError(null);
+        throw new Error(nextError);
       }
 
-      if (normalizedStatus && TERMINAL_TRAINING_STATUSES.has(normalizedStatus)) {
-        setIsTraining(false);
-        trainingUserIdRef.current = null;
-      }
+      await deleteTrainingSession(currentUserId, currentTrainingSessionId);
+
+      setTrainingStatus(normalizedStatus ?? "cancelled");
+      setProgress(nextProgress ?? 0);
+      setTrainingError(null);
+      setIsTraining(false);
+      setTrainingSessionID(null);
+      trainingUserIdRef.current = null;
+    } catch (error) {
+      console.error("Failed to cancel training", error);
+      alert(error instanceof Error ? error.message : "Failed to cancel training.");
     } finally {
       setIsCanceling(false);
     }

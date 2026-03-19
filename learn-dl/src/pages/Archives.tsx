@@ -1,26 +1,40 @@
 import { useEffect, useState } from "react";
-import { Download, Calendar } from "lucide-react";
+import { Calendar, Loader2, Trash2 } from "lucide-react";
+import { deleteTrainingSession } from "../api/mlTraining";
+import { getCurrentUserId } from "../api/session";
 import { getUserTrainingSessions, type TrainingRun } from "../api/trainingSessions";
 import { TrainingVisualizations } from "../components/TrainingVisualizations";
 
-const trainingData = [
-  { id: 1, text: "I loved this movie", label: "Positive" },
-  { id: 2, text: "Terrible acting", label: "Negative" },
-  { id: 3, text: "Not bad at all", label: "Positive" },
-  { id: 4, text: "Waste of time", label: "Negative" },
-  { id: 5, text: "Amazing cinematography", label: "Positive" },
-  { id: 6, text: "Poor script", label: "Negative" },
-  { id: 7, text: "Great soundtrack", label: "Positive" },
-  { id: 8, text: "Boring plot", label: "Negative" },
-  { id: 9, text: "Highly recommend", label: "Positive" },
-  { id: 10, text: "Disappointing ending", label: "Negative" },
-];
+const getPreviewColumns = (rows: Record<string, unknown>[]) => {
+  const columns = new Set<string>();
+
+  rows.forEach((row) => {
+    Object.keys(row).forEach((key) => {
+      columns.add(key);
+    });
+  });
+
+  return Array.from(columns);
+};
+
+const formatPreviewCell = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+};
 
 export function Archives() {
   const [trainingRuns, setTrainingRuns] = useState<TrainingRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<TrainingRun | null>(null);
   const [isLoadingRuns, setIsLoadingRuns] = useState(true);
   const [runsError, setRunsError] = useState<string | null>(null);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -58,24 +72,35 @@ export function Archives() {
     };
   }, []);
 
-  const getModelDisplayName = (modelCode: string) => {
-    const names: Record<string, string> = {
-      distilbert: "DistilBERT",
-      roberta: "RoBERTa",
-      bilstm: "BiLSTM + GloVe",
-    };
-    return names[modelCode] || modelCode;
+  const handleDeleteTrainingRun = async (trainingSessionId: string) => {
+    if (deletingRunId) {
+      return;
+    }
+
+    setDeletingRunId(trainingSessionId);
+
+    try {
+      const userId = await getCurrentUserId();
+      await deleteTrainingSession(userId, trainingSessionId);
+
+      const remainingRuns = trainingRuns.filter((run) => run.id !== trainingSessionId);
+      setTrainingRuns(remainingRuns);
+      setSelectedRun((current) =>
+        current?.id === trainingSessionId ? (remainingRuns[0] ?? null) : current,
+      );
+    } catch (error) {
+      console.error("Failed to delete training session", error);
+      alert(error instanceof Error ? error.message : "Failed to delete training session.");
+    } finally {
+      setDeletingRunId(null);
+    }
   };
 
-  const getDatasetDisplayName = (datasetCode: string) => {
-    const names: Record<string, string> = {
-      imdb: "IMDB Sentiment",
-      sms: "SMS Spam",
-      agnews: "AG News",
-      csv: "Custom CSV",
-    };
-    return names[datasetCode] || datasetCode;
-  };
+  const previewRows = selectedRun?.datasetPreview ?? [];
+  const previewColumns = getPreviewColumns(previewRows);
+  const trainingConfig = selectedRun?.hyperParams?.training_config;
+  const embedModelConfig = selectedRun?.hyperParams?.embed_model_config;
+  const classifierConfig = selectedRun?.hyperParams?.classifier_config;
 
   if (isLoadingRuns) {
     return (
@@ -93,9 +118,7 @@ export function Archives() {
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">No Training History</h2>
-          <p className="text-gray-600">
-            {runsError || "Train a model to see it appear here."}
-          </p>
+          <p className="text-gray-600">{runsError || "Train a model to see it appear here."}</p>
         </div>
       </div>
     );
@@ -103,174 +126,252 @@ export function Archives() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
-      {/* Sidebar - Training History */}
       <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
         <div className="p-6">
           <h2 className="font-semibold text-lg mb-4">Training History</h2>
           <div className="space-y-2">
-            {trainingRuns.map((run, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedRun(run)}
+            {trainingRuns.map((run) => (
+              <div
+                key={run.id}
                 className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                  selectedRun?.name === run.name
+                  selectedRun?.id === run.id
                     ? "bg-blue-50 border-blue-200"
                     : "bg-white border-gray-200 hover:bg-gray-50"
                 }`}
               >
-                <div className="font-medium mb-1">{run.name}</div>
-                <div className="text-sm text-gray-600 flex items-center gap-1 mb-1">
-                  <Calendar className="size-3" />
-                  {run.date}
+                <div className="mb-1 flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRun(run)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="font-medium">{run.name}</div>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingRunId === run.id}
+                    onClick={() => void handleDeleteTrainingRun(run.id)}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded text-red-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`Delete ${run.name}`}
+                    title={`Delete ${run.name}`}
+                  >
+                    {deletingRunId === run.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
+                  </button>
                 </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">Accuracy: </span>
-                  <span className="font-medium text-green-600">{run.accuracy}</span>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRun(run)}
+                  className="block w-full text-left"
+                >
+                  <div className="text-sm text-gray-600 flex items-center gap-1 mb-1">
+                    <Calendar className="size-3" />
+                    {run.date}
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-gray-600">Accuracy: </span>
+                    <span className="font-medium text-green-600">{run.accuracy}</span>
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Main Panel - Run Detail View */}
       {selectedRun && (
         <div className="flex-1 overflow-y-auto bg-gray-50">
           <div className="max-w-6xl mx-auto p-8">
             <h1 className="text-3xl mb-8">Run Details</h1>
 
             <div className="space-y-6">
-              {/* Section 1: Dataset Summary */}
               <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
                 <h3 className="font-semibold mb-4">Dataset Summary</h3>
                 <div className="grid grid-cols-3 gap-6 mb-6">
                   <div>
                     <div className="text-sm text-gray-600 mb-1">Dataset</div>
-                    <div className="font-medium">{getDatasetDisplayName(selectedRun.dataset)}</div>
+                    <div className="font-medium">{selectedRun.dataset}</div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600 mb-1">Samples</div>
-                    <div className="font-medium">10,000</div>
+                    <div className="text-sm text-gray-600 mb-1">Saved Preview Rows</div>
+                    <div className="font-medium">{previewRows.length}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600 mb-1">Split</div>
-                    <div className="font-medium">{selectedRun.config.trainSplit}/{100 - selectedRun.config.trainSplit}</div>
+                    <div className="font-medium">
+                      {selectedRun.config.trainSplit}/{100 - selectedRun.config.trainSplit}
+                    </div>
                   </div>
                 </div>
-                
+
                 <div className="border-t border-gray-200 pt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Preprocessing Pipeline</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    Preprocessing Pipeline
+                  </h4>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Lowercase</span>
-                      <span className={`text-sm font-medium ${selectedRun.config.lowercase ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedRun.config.lowercase ? 'Enabled' : 'Disabled'}
+                      <span
+                        className={`text-sm font-medium ${
+                          selectedRun.config.lowercase ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {selectedRun.config.lowercase ? "Enabled" : "Disabled"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Remove Punctuation</span>
-                      <span className={`text-sm font-medium ${selectedRun.config.removePunctuation ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedRun.config.removePunctuation ? 'Enabled' : 'Disabled'}
+                      <span
+                        className={`text-sm font-medium ${
+                          selectedRun.config.removePunctuation
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {selectedRun.config.removePunctuation ? "Enabled" : "Disabled"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Remove Stopwords</span>
-                      <span className={`text-sm font-medium ${selectedRun.config.removeStopwords ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedRun.config.removeStopwords ? 'Enabled' : 'Disabled'}
+                      <span
+                        className={`text-sm font-medium ${
+                          selectedRun.config.removeStopwords
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {selectedRun.config.removeStopwords ? "Enabled" : "Disabled"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Lemmatization</span>
-                      <span className={`text-sm font-medium ${selectedRun.config.lemmatization ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedRun.config.lemmatization ? 'Enabled' : 'Disabled'}
+                      <span
+                        className={`text-sm font-medium ${
+                          selectedRun.config.lemmatization
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {selectedRun.config.lemmatization ? "Enabled" : "Disabled"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Section 2: First 10 Training Data */}
               <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                <h3 className="font-semibold mb-4">Training Data (First 10 Samples)</h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16">#</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Text</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-32">Label</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {trainingData.map((item) => (
-                          <tr key={item.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-600">{item.id}</td>
-                            <td className="px-4 py-3 text-sm">{item.text}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                  item.label === "Positive"
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
-                                }`}
+                <h3 className="font-semibold mb-4">Saved Dataset Preview</h3>
+                {previewRows.length > 0 && previewColumns.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16">
+                              #
+                            </th>
+                            {previewColumns.map((column) => (
+                              <th
+                                key={column}
+                                className="px-4 py-3 text-left text-sm font-medium text-gray-700"
                               >
-                                {item.label}
-                              </span>
-                            </td>
+                                {column}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {previewRows.map((row, index) => (
+                            <tr key={`${selectedRun.id}-${index}`} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
+                              {previewColumns.map((column) => (
+                                <td key={column} className="px-4 py-3 text-sm align-top">
+                                  <div className="max-w-xl whitespace-pre-wrap break-words">
+                                    {formatPreviewCell(row[column])}
+                                  </div>
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-500">
+                    No dataset preview was stored for this training session.
+                  </div>
+                )}
               </div>
 
-              {/* Section 3: Hyperparameter Configuration */}
               <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
                 <h3 className="font-semibold mb-4">Hyperparameter Configuration</h3>
                 <div className="grid grid-cols-2 gap-x-12 gap-y-4">
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Model</span>
-                    <span className="font-medium">{getModelDisplayName(selectedRun.model)}</span>
+                    <span className="text-sm text-gray-600">Classifier</span>
+                    <span className="font-medium">
+                      {classifierConfig?.classifier_type ?? selectedRun.model}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
                     <span className="text-sm text-gray-600">Epochs</span>
-                    <span className="font-medium">{selectedRun.config.epochs}</span>
+                    <span className="font-medium">{trainingConfig?.n_epochs ?? "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
                     <span className="text-sm text-gray-600">Batch Size</span>
-                    <span className="font-medium">{selectedRun.config.batchSize}</span>
+                    <span className="font-medium">{trainingConfig?.batch_size ?? "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
                     <span className="text-sm text-gray-600">Learning Rate</span>
-                    <span className="font-medium">{selectedRun.config.learningRate}</span>
+                    <span className="font-medium">
+                      {trainingConfig ? String(trainingConfig.learning_rate) : "N/A"}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Fine-tuned</span>
-                    <span className="font-medium">{selectedRun.config.fineTune ? "Yes" : "No"}</span>
+                    <span className="text-sm text-gray-600">Embedding Model</span>
+                    <span className="font-medium">{embedModelConfig?.embed_model ?? "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Optimizer</span>
-                    <span className="font-medium">AdamW</span>
+                    <span className="text-sm text-gray-600">Fine-tune Mode</span>
+                    <span className="font-medium">
+                      {embedModelConfig?.fine_tune_mode ?? "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Eval Step</span>
+                    <span className="font-medium">{trainingConfig?.eval_step ?? "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Dropout</span>
+                    <span className="font-medium">{classifierConfig?.dropout ?? "N/A"}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Section 4: Visualizations */}
               <TrainingVisualizations data={selectedRun.visualizationData} />
 
-              {/* Section 5: Download */}
               <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                <h3 className="font-semibold mb-4">Export Model</h3>
-                <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                  <Download className="size-5" />
-                  Download Model (.zip)
-                </button>
-                <div className="mt-4 text-sm text-gray-600 space-y-1">
-                  <div>Model size: 256MB</div>
-                  <div>Created: Feb 27, 2026</div>
-                  <div>Framework: PyTorch</div>
+                <h3 className="font-semibold mb-4">Stored Session Details</h3>
+                <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Session ID</span>
+                    <span className="font-medium">{selectedRun.id}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Created</span>
+                    <span className="font-medium">{selectedRun.date}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Model Name</span>
+                    <span className="font-medium">{selectedRun.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Accuracy</span>
+                    <span className="font-medium">{selectedRun.accuracy}</span>
+                  </div>
                 </div>
               </div>
             </div>
