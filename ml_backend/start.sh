@@ -3,6 +3,7 @@ set -e
 
 echo "Starting Redis..."
 redis-server --daemonize yes
+sleep 2
 
 echo "Checking Redis..."
 redis-cli ping
