@@ -1,226 +1,270 @@
-# Learn Deep Learning (LearnDL)
----
-## ECE1724H Advance Web Development: React Ecosystem and Modern Frameworks Project
-- I-Hsuan Ho 1012638022
-- Der-Chien Chang 1005978596
-- Kuan-Yu Chang 1007359760
-- Chia-Chun Wu 1012134101
+# LearnDL (Learn Deep Learning)
+
+Contributors:
+-  I-Hsuan Ho
+-  Der-Chien Chang
+-  Kuan-Yu Chang
+-  Chia-Chun Wu
+
+LearnDL is a full-stack web application for **text classification** aimed at learners: sign in, pick or upload a CSV, configure preprocessing and model settings, train a model asynchronously, inspect metrics and charts, keep a per-user **archive** of runs, and run **predictions** with attention-style visualizations.
+
+This repository is organized as **three cooperating services**:
+
+| Package | Role | Typical local URL |
+|---------|------|-------------------|
+| [`learn-dl/`](learn-dl/) | React + Vite SPA (UI, Firebase Auth client) | `http://localhost:5173` |
+| [`learndl_backend/`](learndl_backend/) | Next.js API (users, datasets, sessions, presigned uploads) | `http://localhost:3000` |
+| [`ml_backend/`](ml_backend/) | FastAPI + PyTorch training and inference | `http://localhost:8000` |
 
 ---
-## Motivation
-Beginners learning deep learning for NLP often struggle with the fragmented and code-heavy workflow required for even basic text classification tasks. Preparing datasets, preprocessing text, configuring models, training, tracking metrics, and interpreting outputs such as confusion matrices or learning curves typically involve substantial boilerplate code across notebooks and scripts. This setup overhead slows experimentation and shifts focus away from conceptual understanding.
 
-LearnDL addresses this gap by providing a guided, UI-driven platform that makes the full text-classification workflow repeatable and explorable. Users can modify preprocessing steps and hyperparameters and immediately observe changes in performance and interpretability, enabling rapid, feedback-driven learning aligned with course assignments. The primary target users are students in DL/NLP courses and beginners seeking a structured sandbox for tasks such as sentiment analysis, spam detection, and topic classification. Unlike notebooks, which require coding expertise and ad hoc experiment tracking, and AutoML platforms, which prioritize final metrics while obscuring training behavior, LearnDL emphasizes transparency, iteration, and learning efficiency.
+## Table of contents
+
+1. [Architecture](#architecture)
+2. [Prerequisites](#prerequisites)
+3. [Environment variables](#environment-variables)
+4. [Local setup (step by step)](#local-setup-step-by-step)
+5. [How the web app works](#how-the-web-app-works)
+6. [API reference (summary)](#api-reference-summary)
+7. [Data formats and constraints](#data-formats-and-constraints)
 
 ---
-## Objective and Key Features
 
-### Objectives
-Build a full-stack web application where authenticated users can upload/select a text dataset, configure preprocessing and training settings, run model training as a job with progress updates, view educational visualizations, and store each run in a per-user training archive with downloadable model artifacts.
+## Architecture
 
-
-### Core Technical Compnents
-
-#### 1. Technical Implementation
-We will use Next.js backend (TypeScript) + React (TypeScript) frontend:
-
-- **Prototype Design:** Figma
-- **Frontend:** React + TypeScript + TailwindCSS
-- **Backend:** Next.js + TypeScript + REST API + Prisma ORM
-- **Database:** PostgreSQL
-- **Authenticatrion** Firebase
-- **Reason:** clean separation of concerns and easier async job orchestration (training pipeline) without mixing server actions into the UI layer.
-
-
-#### 2. Database Schema and Relationship
-We will use PostgreSQL (relational database) with the following schema design, aligned with the application workflow:
-
-1. **Users**
-Stores authenticated user accounts.
-
-```
-  users
-  - userId (PK)
-  - name
-  - email (unique)
-  - firebaseUid
-  - created_at
-  - updated_at
-  - datasets
-  - trainingSessions TrainingSession[]
+```mermaid
+flowchart LR
+  subgraph browser [Browser]
+    UI[learn-dl React app]
+  end
+  subgraph apis [Backend services]
+    API[learndl_backend Next.js API]
+    ML[ml_backend FastAPI]
+  end
+  subgraph data [Data layer]
+    PG[(PostgreSQL)]
+    Spaces[(S3-compatible Spaces)]
+    Redis[(Redis)]
+  end
+  Firebase[(Firebase Auth)]
+  UI --> Firebase
+  UI --> API
+  UI --> ML
+  API --> PG
+  API --> Spaces
+  ML --> Redis
+  ML --> Spaces
 ```
 
-2. **Training Sessions**
-Represents one complete training run (shown in Archive sidebar).
+- **Authentication:** The browser uses the Firebase client SDK. The Next.js backend verifies **Firebase ID tokens** with the Firebase Admin SDK and stores application users in PostgreSQL.
+- **Metadata:** Datasets and training sessions (hyperparameters, stored metrics/visualization payloads) live in PostgreSQL via Prisma.
+- **Large files:** CSV uploads use **presigned URLs** to DigitalOcean Spaces (S3-compatible API). The ML service reads training data from a URL or path and stores checkpoints in the same style of object storage (see `ml_backend` env vars).
+- **Training progress:** The UI **polls** the ML service (`get_train_status`) on an interval; it does not use WebSockets or SSE in the current codebase.
 
+---
+
+## Prerequisites
+
+- **Node.js** (compatible with Next 16 / Vite 7 — Node 20+ recommended)
+- **npm**
+- **Python 3** with `pip` (for `ml_backend`)
+- **PostgreSQL 17** (local install or Docker)
+- **Redis** (for `ml_backend` job status; local or Docker)
+- **Firebase project** with Email/Password authentication enabled
+- **DigitalOcean Spaces** (or compatible S3) credentials for dataset upload and ML artifacts — required for full upload/train/predict flows
+
+Optional: **Docker** and **Docker Compose** for containerized Postgres/backend or ML service.
+
+---
+
+## Environment variables
+
+### Frontend — `learn-dl/.env` (Vite prefix `VITE_`)
+
+Create `learn-dl/.env` (or `.env.local`) with:
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_FIREBASE_API_KEY` | Firebase Web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket (Web config) |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `VITE_API_URL` | Base URL for the Next API (default `http://localhost:3000/api`) |
+| `VITE_ML_API_URL` | Full ML API base including path (default `http://localhost:8000/model_api`) |
+| `VITE_IMDB_DATASET_URL` | HTTPS URL to built-in IMDB CSV (optional) |
+| `VITE_SMS_DATASET_URL` | HTTPS URL to built-in SMS spam CSV (optional) |
+| `VITE_AGNEWS_DATASET_URL` | HTTPS URL to built-in AG News CSV (optional) |
+
+In **development**, Vite proxies requests under the ML API path to the origin derived from `VITE_ML_API_URL`, so the browser can call same-origin paths like `/model_api/...` while the dev server forwards to port 8000.
+
+### Backend — `learndl_backend/.env.local`
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXT_PUBLIC_FIREBASE_*` | Must match the Firebase Web app (used where needed server-side) |
+| `FIREBASE_PROJECT_ID` | Admin SDK project ID |
+| `FIREBASE_CLIENT_EMAIL` | Admin SDK service account email |
+| `FIREBASE_PRIVATE_KEY` | Admin SDK private key (use `\n` for newlines in `.env`) |
+| `SPACES_KEY` / `SPACES_SECRET` / `SPACES_BUCKET` | DigitalOcean Spaces credentials and bucket |
+| `CORS_ALLOWED_ORIGINS` | Optional comma-separated list; defaults include `http://localhost:5173` |
+
+The S3 client in code targets the `tor1` DigitalOcean region endpoint; adjust code in `learndl_backend/lib/spaces.ts` if you use another region.
+
+### ML service — `ml_backend/.env`
+
+See [`ml_backend/.env.example`](ml_backend/.env.example):
+
+| Variable | Purpose |
+|----------|---------|
+| `REDIS_HOST` | Redis hostname (default `localhost`) |
+| `DO_REGION` | Spaces region |
+| `DO_ENDPOINT` | Spaces endpoint URL |
+| `DO_ACCESS_KEY` / `DO_SECRET_KEY` | Spaces keys |
+| `DO_BUCKET_NAME` | Bucket for checkpoints and related objects |
+
+---
+
+## Local setup (step by step)
+
+### 1. LearnDL backend (PostgreSQL + migrations + Next.js API)
+
+Use Docker Compose from the backend folder so you do **not** need to run `npm install`, Prisma CLI, or `npm run dev` on the host for the API.
+
+1. Create **`learndl_backend/.env.local`** with Firebase Admin (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`), the matching **`NEXT_PUBLIC_FIREBASE_*`** values, and DigitalOcean Spaces (`SPACES_KEY`, `SPACES_SECRET`, `SPACES_BUCKET`). For this Docker path, Compose injects `DATABASE_URL` for the `migrate` and `backend` services, so you do not need a host `localhost` database URL in that file unless you also run tools on the host.
+
+2. From the backend directory, build and start Postgres, run migrations (with fallback to `db push` and seed), and start the API:
+
+```bash
+cd learndl_backend
+docker compose up --build
 ```
-  training_sessions
-  - sessionId (PK)
-  - user_id (FK → users.id)
-  - datasetId
-  - model_name
-  - hyper_params (JSON)
-  - metrics (JSON)
-  - created_at
-  - user       
-  - dataset
+
+3. **API base:** `http://localhost:3000` (REST routes under `/api/...`). Postgres is exposed on host port **5432** (`postgres` / `postgres`, database `learndl_db`).
+
+### 3. ML service (`ml_backend`)
+
+1. Create **`ml_backend/.env`** from **`ml_backend/.env.example`**: set `DO_REGION`, `DO_ENDPOINT`, `DO_ACCESS_KEY`, `DO_SECRET_KEY`, and `DO_BUCKET_NAME`. Keep **`REDIS_HOST=localhost`** so the app uses the Redis process started inside the Docker container (`start.sh`).
+
+2. Build and run (Redis + Uvicorn on port **8000**; project folder is mounted for `--reload`):
+
+```bash
+cd ml_backend
+docker compose up --build
 ```
 
-3. **Dataset Storage (S3 – CSV files)**
-Datasets are stored in S3 as .csv.
+- **API:** `http://localhost:8000`
+- **OpenAPI docs:** `http://localhost:8000/docs`
+- **ML routes:** `/model_api/...`
 
+**Alternative (no Docker):** Python venv, `pip install -r requirements.txt`, Redis on the host, then `python -m api.main` or `uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload`. See **`ml_backend/README.md`**.
+
+### 4. Frontend (`learn-dl`)
+
+```bash
+cd learn-dl
+npm install
+# Create .env with VITE_* variables (see above)
+
+npm run dev
 ```
-  datasets
-  - datasetId (PK)
-  - user_id (FK)
-  - training_session_id (FK)
-  - csv_name
-  - preview (JSON)
-  - isDefault (BOOL)
-  - createdAt
-  - user 
-  - trainingSessions  
-```
 
+Open `http://localhost:5173`. Log in or register on the welcome screen; authenticated users are redirected to **Training**.
 
-#### 3. File Storage Requirements
+**Order to start services:** PostgreSQL → `learndl_backend` → Redis → `ml_backend` → `learn-dl`.
 
-Use **S3-compatible object storage** for large files:
+---
 
-- Uploaded CSV datasets (raw + processed)
-- Model artifacts packaged as `.zip`
+## How the web app works
 
-DB stores only **metadata**, not raw binary blobs.
+### Routes and navigation
 
+The SPA uses React Router:
 
-#### 4. UI and Experience Design
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/main_page.png)
+| Path | Access | Description |
+|------|--------|---------------|
+| `/` | Public | Welcome: login and signup (Firebase + backend registration) |
+| `/training` | Protected | Main training workflow |
+| `/prediction` | Protected | Inference against a completed session |
+| `/archive` | Protected | History of runs with charts and previews |
 
-- **Training Page**
-    - Dataset dropdown (built-in + upload)
-    - Preprocessing toggles (lowercase, punctuation, stopwords, lemmatization optional)
-    - Model selection (BiLSTM+GloVe, DistilBERT, RoBERTa)
-    - Hyperparameters (epochs, batch size, learning rate, fine-tune toggle)
-    - “Start Training” button + training progress status
- 
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/prediction.png)
- 
-- **Prediction Page**
-    - Model dropdown (user’s completed runs)
-    - Text input area + Predict button
-    - Output label + confidence (optionally token highlights)
- 
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/archive_details.png)
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result.png)
-![Main Page](https://github.com/cc5u/ECE1724H_Advanced_Web/blob/main/proposal_images/training_result2.png)
+The shell layout (`PageLayout`) provides navigation between Training, Prediction, and Archive, plus logout.
 
-- **Archive Page**
-    - **Left sidebar**: per-user run history cards (model/dataset/date/accuracy)
-    - **Run detail** shows:
-        - Dataset summary
-        - First 10 samples table
-        - Hyperparameter configuration
-        - Training results (metrics cards + confusion matrix + learning curve)
-        - Download model zip
+### Authentication flow
 
+1. **Sign up:** Firebase `createUserWithEmailAndPassword`, optional display name, then `POST /api/auth/register` with the Firebase ID token. The app then signs the user out of Firebase locally so they complete a normal login afterward.
+2. **Login:** Firebase `signInWithEmailAndPassword`, then `POST /api/auth/login` so the backend can associate the Firebase UID with the PostgreSQL user.
+3. **Subsequent API calls:** Axios attaches `Authorization: Bearer <idToken>` from the current Firebase user (`learn-dl/src/api/axiosClient.ts`).
+4. **Current user id:** `GET /api/auth/me` returns the Prisma user; the frontend uses `userId` for user-scoped routes.
 
-#### 5. Planned Advanced Feature(At Least Two)
-We will implement **at least two** (we plan 4 to be safe):
+### Training page
 
-1. **Authentication & authorization**
-- Register/login/logout
-- Protected API routes
-- Per-user isolation (users can only see their own runs and files)
-1. **Real-time progress updates**
-- Training is asynchronous
-- Frontend receives live status updates via **SSE** (simpler than WebSocket) showing:
-    - current epoch, loss/accuracy, status
-1. **Non-trivial file handling**
-- CSV upload + server-side validation and column mapping
-- Derived artifacts generation (processed preview + model.zip)
-1. **AI Chatbot Result Explanation**
-- Floating AI chatbot (bottom-right corner) available across Training, Archive, and Prediction pages
-- Context-aware: when viewing a specific training run, the chatbot can explain:
-    - metrics (accuracy, precision, recall, F1)
-    - confusion matrix interpretation
-    - learning curves (overfitting/underfitting)
-    - hyperparameter effects
-    - prediction confidence and token importance
-- Backend retrieves run data (metrics, hyperparameters, confusion matrix, curves) and sends structured context to the LLM
-- Strict per-user isolation: chatbot can only access the authenticated user’s training sessions
+1. **Dataset selection:** Built-in options (IMDB, SMS Spam, AG News) use public CSV URLs from env. **Upload CSV** creates metadata via the Next API, receives a **presigned PUT URL**, and uploads the file directly to Spaces.
+2. **Preprocessing:** Toggles for lowercase, punctuation, stopwords, lemmatization, plus URL/email handling modes (see `PreprocessingCard`).
+3. **Model parameters:** Embedding choice among **BERT**, **DistilBERT**, and **RoBERTa**; epochs, batch size, learning rate (max 0.01), evaluation frequency, and fine-tuning mode (freeze all, unfreeze last N layers, unfreeze all).
+4. **Classifier:** Type **GRU** or **LINEAR**, hidden size, dropout (slider).
+5. **Start training:** The client calls the ML service `POST /model_api/train` with `user_id` and `training_session_id` query parameters and a JSON body aligned with `TrainingPayload` in `learn-dl/src/api/mlTraining.ts`.
+6. **Progress:** The UI polls `GET /model_api/get_train_status` every few seconds until a terminal state (`completed`, `error`, or `cancelled`). Cancel uses `POST /model_api/cancel_train`.
+7. **Persisting results:** On success, the frontend calls `PUT /api/users/:userId/training_sessions/store_result` to save hyperparameters and the visualization/metrics JSON returned by the ML service into PostgreSQL.
 
+### Archive page
 
-## Tentative Plan
-| Week | I-Hsuan Ho | Der-Chien Chang | Kuan-Yu Chang | Chia-Chun Wu |
-|------|------------|-----------------|---------------|--------------|
-| **Week 1 (March 2, 2026)** | • Cloud setup + S3 connection test<br>• Signed URL upload + validation | • Design Prototype<br>• Prediction API<br>• Model training pipeline | • DB schema + authentication<br>• Dataset API + ownership checks | • Implement UI skeleton (3 pages)<br>• Auth UI for login/register |
-| **Week 2 (March 9, 2026)** | • Artifact storage structure<br>• Zip packaging pipeline | • Model training pipeline<br>• Model Result Visualization components Pipeline (model, cloud, render frontend) | • Dataset API + ownership checks<br>• Secure artifact endpoints | • Dataset upload UI components and dropdown<br>• History sidebar UI<br>• Prediction page |
-| **Week 3 (March 16, 2026)** | • Presentation Slides and Rehearsal<br>• Artifact download URLs | • Presentation Slides and Rehearsal | • Presentation Slides and Rehearsal | • Presentation Slides and Rehearsal |
-| **Week 4 (March 23, 2026)** | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation | • Testing/Debugging<br>• Performance sanity checks<br>• Edge case validation |
+- Loads `GET /api/users/:userId/training_sessions` (enforced to match the authenticated user).
+- Sidebar lists runs with model name, dataset filename, date, and accuracy string derived from stored metrics.
+- Detail view shows dataset preview rows, configuration summary, and **`TrainingVisualizations`**: metric cards (accuracy, precision, recall, F1), confusion matrix, learning curves, attention visualization, and 2D embedding projection when present in stored JSON.
+- Delete run: `DELETE` to the training session delete endpoint (and related cleanup as implemented server-side).
 
+### Prediction page
 
-## Initial Independent Reasoning (Before using AI)
-### 1) Application structure and architecture
+- Lists the same completed training sessions.
+- User enters text and runs `POST /model_api/model_output` with the full training config (including `class_map` from the run) so the ML service can load the correct checkpoint from object storage.
+- Displays predicted label, top confidences, and attention visualization (`AttentionPanel`).
 
-We initially debated **Next.js full-stack vs separate frontend/backend**. We chose **separate React frontend + Express backend** because:
+---
 
-- training jobs are long-running and benefit from a dedicated API + worker design
-- clearer separation for team parallel work (UI vs API vs training worker)
+## API reference (summary)
 
-### 2) Data and state design
+### Next.js API (`/api/...`)
 
-We planned:
+Base URL: `http://localhost:3000/api` (or your deployment host).
 
-- PostgreSQL as the source of truth for users, datasets, runs, and results
-- Client state kept minimal (form state + selected run); everything else fetched via APIs
-- Archive view driven by `training_runs` list + `run_detail` endpoint
-- Files stored in S3 with DB storing only metadata + URLs
+| Method | Path | Notes |
+|--------|------|------|
+| POST | `/auth/register` | Register app user after Firebase signup |
+| POST | `/auth/login` | Session sync / lookup |
+| POST | `/auth/logout` | Logout |
+| GET | `/auth/me` | Current user |
+| GET/PUT/PATCH/DELETE | `/users/me`, `/users/me/password`, `/users/me/delete` | Profile operations |
+| GET | `/users/:userId/datasets` | Must match authenticated user |
+| POST | `/users/:userId/datasets/upload` | Create dataset + presigned URLs |
+| DELETE | `/users/:userId/datasets/delete` | Remove dataset |
+| POST | `/users/:userId/datasets/reload` | Reload flow (see route implementation) |
+| GET | `/users/:userId/training_sessions` | List sessions + metrics |
+| PUT | `/users/:userId/training_sessions/store_result` | Save ML results |
+| DELETE | `/users/:userId/training_sessions/delete` | Delete session |
 
-### 3) Feature selection and scope decisions
+Full detail: [`learndl_backend/README.md`](learndl_backend/README.md).
 
-Core features decided first: Training → Results → Archive → Prediction.
+### ML API (`/model_api/...`)
 
-Advanced features chosen for learning value and feasibility:
+Prefix on local dev: `http://localhost:8000/model_api`.
 
-- auth (essential for per-user archive)
-- real-time progress (improves UX)
-- file processing (CSV validation + artifacts)
+| Method | Path | Notes |
+|--------|------|------|
+| GET | `/health_check` | Liveness |
+| POST | `/train` | Async training |
+| GET | `/get_train_status` | Poll status and results |
+| POST | `/cancel_train` | Cancel job |
+| POST | `/model_output` | Predict |
 
-We intentionally limited ML scope to avoid turning this into an ML research project.
+Full request schemas and examples: [`ml_backend/README.md`](ml_backend/README.md).
 
-### 4) Anticipated challenges
+---
 
-- Secure auth + ownership enforcement (prevent cross-user access)
-- Reliable job execution + progress streaming without UI freezing
-- Handling file uploads + large artifacts cleanly (storage + metadata consistency)
-- Integrating visualization data formats into reusable UI components
+## Data formats and constraints
 
-### 5) Early collaboration plan
-
-We planned to divide by system boundaries (frontend/backend/worker) with weekly integration checkpoints:
-
-- API contracts defined early (request/response schemas)
-- backend provides mock responses while training pipeline is built
-- frontend builds UI against mock data, then switches to real endpoints
-
-## AI Assistance Disclosure
-### Brief reflection on how AI contributed
-
-AI was used to accelerate proposal drafting and to sanity-check the architecture and schema completeness against the feature requirements.
-
-### 1) Which parts were developed without AI?
-
-- Original product idea (LearnDL), UI concept (Training/Prediction/Archive), and the archive sidebar requirement
-- Initial decision to prioritize educational visualizations (learning curve/confusion matrix/attention)
-
-### 2) If AI was used, what tasks did it help with?
-
-- Draft organization using the course-required headings
-- Concrete database schema mapping from UI requirements
-- Suggesting feasible real-time mechanisms (SSE vs WebSocket)
-- Risk/scoping suggestions (implement one model end-to-end first)
-
-### 3) One idea influenced by AI + team tradeoff discussion
-
-- **AI suggestion:** Use **SSE** for real-time training updates instead of full WebSockets.
-- **Team tradeoff decision:** We chose SSE because it is simpler to implement/debug and sufficient for one-way progress updates. If time permits, we can extend to WebSockets later, but SSE reduces risk within the course timeline.
+- **CSV:** Two columns — text then label. The loader maps them to `input` and `output`. Rows with missing values are dropped.
+- **Built-in datasets:** Must be reachable URLs your browser and ML service can read (CORS/network permitting for the frontend where applicable).
+- **Checkpoints:** Stored under user/session-related keys in object storage; prediction requires a completed training run and matching configuration.
