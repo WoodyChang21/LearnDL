@@ -15,6 +15,15 @@ This repository is organized as **three cooperating services**:
 | [`learn-dl/`](learn-dl/) | React + Vite SPA (UI, Firebase Auth client) | `http://localhost:5173` |
 | [`learndl_backend/`](learndl_backend/) | Next.js API (users, datasets, sessions, presigned uploads) | `http://localhost:3000` |
 | [`ml_backend/`](ml_backend/) | FastAPI + PyTorch training and inference | `http://localhost:8000` |
+---
+## Demo
+A quick walkthrough of LearnDL — upload datasets, configure models, and visualize training results in real time.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=C6eciKds1wU">
+    <img src="https://img.youtube.com/vi/C6eciKds1wU/0.jpg" alt="LearnDL Demo" width="800"/>
+  </a>
+</p>
 
 ---
 
